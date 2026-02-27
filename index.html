@@ -60,7 +60,7 @@ european football league sim, football tactics tester, live points table generat
         <span class="brand-text">League Simulator</span>
       </div>
       <div class="header-actions">
-        <button class="header-btn" onclick="openThemePicker()" title="Change Theme">
+        <button class="header-btn" id="themeBtn" title="Change Theme">
           <span>🎨</span>
         </button>
       </div>
@@ -83,6 +83,11 @@ european football league sim, football tactics tester, live points table generat
         var t = localStorage.getItem('ls-theme') || 'midnight';
         document.body.setAttribute('data-theme', t);
       })();
+      // Attach theme button listener after DOM is ready
+      document.addEventListener('DOMContentLoaded', function() {
+        var btn = document.getElementById('themeBtn');
+        if (btn) btn.addEventListener('click', function() { openThemePicker(); });
+      });
     </script>
   </body>
 </html>
