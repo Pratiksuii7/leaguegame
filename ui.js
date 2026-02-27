@@ -10,6 +10,10 @@ function renderSetup() {
       <input type="number" id="teamCount" min="2" max="${maxTeams}" value="8" oninput="renderTeamNameInputs()">
       <div id="teamNamesContainer"></div>
       <button onclick="startLeague()">🚀 Generate Teams & Start</button>
+      <div style="display:flex; gap:12px; margin-top:16px; justify-content:center; flex-wrap:wrap;">
+        <button class="btn-secondary" onclick="importRosterData()" style="flex:1; min-width:140px;">📥 Import Roster</button>
+        <button class="btn-secondary" onclick="importTournament()" style="flex:1; min-width:140px;">📂 Load Tournament</button>
+      </div>
     </div>
   `;
   renderTeamNameInputs();
@@ -103,6 +107,10 @@ function renderLeagueUI() {
       <div class="action-card" onclick="viewTrophyRoom()">
         <div class="action-icon">🏅</div>
         <div class="action-label">Trophies</div>
+      </div>
+      <div class="action-card" onclick="openSaveLoadPopup()">
+        <div class="action-icon">💾</div>
+        <div class="action-label">Save/Load</div>
       </div>
       <div class="action-card danger" onclick="restartLeague()">
         <div class="action-icon">🔄</div>
@@ -638,6 +646,10 @@ function renderNextKnockoutMatch() {
           <div class="action-icon">📋</div>
           <div class="action-label">Team Stats</div>
         </div>
+        <div class="action-card" onclick="openSaveLoadPopup()">
+          <div class="action-icon">💾</div>
+          <div class="action-label">Save/Load</div>
+        </div>
         <div class="action-card danger" onclick="restartLeague()">
           <div class="action-icon">🔄</div>
           <div class="action-label">Restart</div>
@@ -683,6 +695,8 @@ function renderNextKnockoutMatch() {
             <button class="btn-secondary" onclick="showLeagueStats()">📊 Stats</button>
             <button class="btn-secondary" onclick="viewAwards()">📋 Teams</button>
             <button class="btn-secondary" onclick="viewTrophyRoom()">🏅 Trophies</button>
+            <button class="btn-secondary" onclick="exportRosterData()">📤 Export Roster</button>
+            <button class="btn-secondary" onclick="exportTournament()">💾 Save Tournament</button>
           </div>
         </div>
         <div id="knockoutBracket"></div>
@@ -1689,4 +1703,400 @@ function setTheme(name) {
             openThemePicker();
         }
     }
+}
+
+/* ============================================
+   SAVE / LOAD / EXPORT / IMPORT SYSTEM
+   ============================================ */
+
+// --- HELPER: Download a JSON file ---
+function downloadJSON(data, filename) {
+    const blob = new Blob([JSON.stringify(data, null, 2)], { type: 'application/json' });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    a.href = url;
+    a.download = filename;
+    document.body.appendChild(a);
+    a.click();
+    document.body.removeChild(a);
+    URL.revokeObjectURL(url);
+}
+
+// --- HELPER: Read a JSON file from user ---
+function readJSONFile(callback) {
+    const input = document.createElement('input');
+    input.type = 'file';
+    input.accept = '.json';
+    input.onchange = (e) => {
+        const file = e.target.files[0];
+        if (!file) return;
+        const reader = new FileReader();
+        reader.onload = (ev) => {
+            try {
+                const data = JSON.parse(ev.target.result);
+                callback(data, null);
+            } catch (err) {
+                callback(null, 'Invalid JSON file. Please select a valid League Simulator file.');
+            }
+        };
+        reader.onerror = () => callback(null, 'Failed to read the file.');
+        reader.readAsText(file);
+    };
+    input.click();
+}
+
+// --- HELPER: Serialize fixture (replace team object refs with team IDs) ---
+function serializeFixture(f) {
+    return {
+        homeId: f.home ? f.home.id : null,
+        awayId: f.away ? f.away.id : null,
+        homeScore: f.homeScore,
+        awayScore: f.awayScore,
+        played: f.played
+    };
+}
+
+// --- HELPER: Deserialize fixture (rebuild team object refs from IDs) ---
+function deserializeFixture(f, teamMap) {
+    return {
+        home: teamMap[f.homeId] || null,
+        away: teamMap[f.awayId] || null,
+        homeScore: f.homeScore,
+        awayScore: f.awayScore,
+        played: f.played
+    };
+}
+
+// --- HELPER: Serialize knockout match ---
+function serializeKnockoutMatch(m) {
+    return {
+        name: m.name,
+        homeId: m.home ? m.home.id : null,
+        awayId: m.away ? m.away.id : null
+    };
+}
+
+// --- HELPER: Serialize knockout result ---
+function serializeKnockoutResult(r) {
+    return {
+        stage: r.stage,
+        match: serializeKnockoutMatch(r.match),
+        homeScore: r.homeScore,
+        awayScore: r.awayScore,
+        winnerId: r.winner ? r.winner.id : null,
+        penaltyNote: r.penaltyNote || '',
+        penaltyResult: r.penaltyResult || null
+    };
+}
+
+// ============================================
+// 1. EXPORT FULL TOURNAMENT STATE
+// ============================================
+function exportTournament() {
+    if (teams.length === 0) {
+        alert('No tournament data to export!');
+        return;
+    }
+
+    const saveData = {
+        _type: 'league-simulator-tournament',
+        _version: 2,
+        _exportDate: new Date().toISOString(),
+        teams: teams.map(t => ({
+            id: t.id,
+            name: t.name,
+            color: t.color,
+            players: t.players.map(p => ({
+                name: p.name,
+                rating: p.rating,
+                position: p.position,
+                type: p.type || 'Normal',
+                freekickRating: p.freekickRating,
+                passingRating: p.passingRating,
+                playStyle: p.playStyle || 'balanced',
+                goals: p.goals,
+                assists: p.assists,
+                yellowCards: p.yellowCards,
+                redCards: p.redCards,
+                penalties: p.penalties,
+                freekicks: p.freekicks,
+                passesAttempted: p.passesAttempted,
+                passesCompleted: p.passesCompleted
+            })),
+            stats: { ...t.stats }
+        })),
+        fixtures: fixtures.map(serializeFixture),
+        matchHistory: matchHistory.slice(),
+        knockoutMatches: knockoutMatches.map(serializeKnockoutMatch),
+        knockoutResults: knockoutResults.map(serializeKnockoutResult),
+        knockoutHistory: (knockoutHistory || []).map(serializeKnockoutResult),
+        knockoutStage: knockoutStage,
+        seasonEnded: seasonEnded,
+        seasonHistory: seasonHistory.slice(),
+        globalRecords: JSON.parse(JSON.stringify(globalRecords))
+    };
+
+    const datePart = new Date().toISOString().slice(0, 10);
+    downloadJSON(saveData, `league-tournament-${datePart}.json`);
+    alert('✅ Tournament saved! You can load this file later to resume.');
+}
+
+// ============================================
+// 2. IMPORT FULL TOURNAMENT STATE
+// ============================================
+function importTournament() {
+    readJSONFile((data, err) => {
+        if (err) return alert(err);
+        if (!data || data._type !== 'league-simulator-tournament') {
+            return alert('❌ This is not a valid tournament save file.\nPlease select a file exported from League Simulator.');
+        }
+
+        // Restore teams
+        teams = (data.teams || []).map(t => ({
+            id: t.id,
+            name: t.name,
+            color: t.color,
+            players: (t.players || []).map(p => ({
+                name: p.name,
+                rating: p.rating,
+                position: p.position,
+                type: p.type || 'Normal',
+                freekickRating: p.freekickRating || p.rating,
+                passingRating: p.passingRating || p.rating,
+                playStyle: p.playStyle || 'balanced',
+                goals: p.goals || 0,
+                assists: p.assists || 0,
+                yellowCards: p.yellowCards || 0,
+                redCards: p.redCards || 0,
+                penalties: p.penalties || 0,
+                freekicks: p.freekicks || 0,
+                passesAttempted: p.passesAttempted || 0,
+                passesCompleted: p.passesCompleted || 0
+            })),
+            stats: t.stats || { played: 0, wins: 0, draws: 0, losses: 0, goalsFor: 0, goalsAgainst: 0, points: 0 }
+        }));
+
+        // Build team lookup map by ID
+        const teamMap = {};
+        teams.forEach(t => { teamMap[t.id] = t; });
+
+        // Restore fixtures
+        fixtures = (data.fixtures || []).map(f => deserializeFixture(f, teamMap));
+
+        // Restore match history
+        matchHistory = data.matchHistory || [];
+        localStorage.setItem("matchHistory", JSON.stringify(matchHistory));
+
+        // Restore knockout state
+        knockoutMatches = (data.knockoutMatches || []).map(m => ({
+            name: m.name,
+            home: teamMap[m.homeId] || null,
+            away: teamMap[m.awayId] || null
+        }));
+
+        knockoutResults = (data.knockoutResults || []).map(r => ({
+            stage: r.stage,
+            match: {
+                name: r.match.name,
+                home: teamMap[r.match.homeId] || null,
+                away: teamMap[r.match.awayId] || null
+            },
+            homeScore: r.homeScore,
+            awayScore: r.awayScore,
+            winner: teamMap[r.winnerId] || null,
+            penaltyNote: r.penaltyNote || '',
+            penaltyResult: r.penaltyResult || null
+        }));
+
+        knockoutHistory = (data.knockoutHistory || []).map(r => ({
+            stage: r.stage,
+            match: {
+                name: r.match.name,
+                home: teamMap[r.match.homeId] || null,
+                away: teamMap[r.match.awayId] || null
+            },
+            homeScore: r.homeScore,
+            awayScore: r.awayScore,
+            winner: teamMap[r.winnerId] || null,
+            penaltyNote: r.penaltyNote || '',
+            penaltyResult: r.penaltyResult || null
+        }));
+
+        knockoutStage = data.knockoutStage || 0;
+        seasonEnded = data.seasonEnded || false;
+        seasonHistory = data.seasonHistory || [];
+        localStorage.setItem("seasonHistory", JSON.stringify(seasonHistory));
+
+        globalRecords = data.globalRecords || { topScorers: [], topAssisters: [], topTeamPoints: [], topTeamGoals: [] };
+        localStorage.setItem("globalRecords", JSON.stringify(globalRecords));
+
+        // Find where we are and render accordingly
+        currentMatchIndex = fixtures.findIndex(f => !f.played);
+        if (currentMatchIndex === -1) currentMatchIndex = fixtures.length;
+
+        // Decide which screen to show
+        if (knockoutMatches.length > 0) {
+            renderNextKnockoutMatch();
+        } else {
+            renderLeagueUI();
+        }
+
+        alert('✅ Tournament loaded successfully!');
+    });
+}
+
+// ============================================
+// 3. EXPORT ROSTER ONLY (players + teams, NO stats)
+// ============================================
+function exportRosterData() {
+    if (teams.length === 0) {
+        alert('No team data to export!');
+        return;
+    }
+
+    const rosterData = {
+        _type: 'league-simulator-roster',
+        _version: 1,
+        _exportDate: new Date().toISOString(),
+        teams: teams.map(t => ({
+            name: t.name,
+            color: t.color,
+            players: t.players.map(p => ({
+                name: p.name,
+                rating: p.rating,
+                position: p.position,
+                type: p.type || 'Normal',
+                freekickRating: p.freekickRating,
+                passingRating: p.passingRating,
+                playStyle: p.playStyle || 'balanced'
+            }))
+        }))
+    };
+
+    const datePart = new Date().toISOString().slice(0, 10);
+    downloadJSON(rosterData, `league-roster-${datePart}.json`);
+    alert('✅ Roster exported! This file contains only teams and players — no stats or results.\nUse "Import Roster" on the start screen to recreate this exact setup.');
+}
+
+// ============================================
+// 4. IMPORT ROSTER DATA (on setup screen)
+// ============================================
+function importRosterData() {
+    readJSONFile((data, err) => {
+        if (err) return alert(err);
+        if (!data || data._type !== 'league-simulator-roster') {
+            return alert('❌ This is not a valid roster file.\nPlease select a roster file exported from League Simulator.\n\n(Looking for a tournament save? Use "Load Tournament" instead.)');
+        }
+
+        if (!data.teams || data.teams.length < 2) {
+            return alert('❌ Roster file must contain at least 2 teams.');
+        }
+
+        if (data.teams.length > maxTeams) {
+            return alert(`❌ Roster file contains ${data.teams.length} teams, but the maximum is ${maxTeams}.`);
+        }
+
+        // Rebuild teams from roster data
+        teams = data.teams.map((t, i) => ({
+            id: i,
+            name: t.name,
+            color: t.color || `hsl(${randomInt(0, 360)}, 60%, 45%)`,
+            players: (t.players || []).map(p => ({
+                name: p.name,
+                rating: p.rating,
+                position: p.position,
+                type: p.type || 'Normal',
+                freekickRating: p.freekickRating || p.rating,
+                passingRating: p.passingRating || p.rating,
+                playStyle: p.playStyle || 'balanced',
+                goals: 0,
+                assists: 0,
+                yellowCards: 0,
+                redCards: 0,
+                penalties: 0,
+                freekicks: 0,
+                passesAttempted: 0,
+                passesCompleted: 0
+            })),
+            stats: { played: 0, wins: 0, draws: 0, losses: 0, goalsFor: 0, goalsAgainst: 0, points: 0 }
+        }));
+
+        // Reset all game state
+        fixtures = [];
+        currentMatchIndex = 0;
+        matchHistory = [];
+        knockoutMatches = [];
+        knockoutResults = [];
+        knockoutHistory = [];
+        knockoutStage = 0;
+        seasonEnded = false;
+
+        // Generate fresh fixtures
+        generateFixtures();
+
+        renderLeagueUI();
+        alert(`✅ Roster imported! ${teams.length} teams with ${teams.reduce((s, t) => s + t.players.length, 0)} total players loaded.\nFixtures have been generated — start playing!`);
+    });
+}
+
+// ============================================
+// 5. OPEN SAVE/LOAD POPUP
+// ============================================
+function openSaveLoadPopup() {
+    const hasTournament = teams.length > 0;
+
+    let html = `
+    <h2 style="text-align:center;">💾 Save & Load</h2>
+    <p style="text-align:center; color:var(--text-muted); font-size:0.85rem; margin-bottom:20px;">
+        Export your tournament to a file or load a previous one
+    </p>
+
+    <div style="display:grid; grid-template-columns: 1fr 1fr; gap:16px; margin-bottom:20px;">
+        <div style="background:var(--glass); border:1px solid var(--glass-border); border-radius:var(--radius-md); padding:20px; text-align:center;">
+            <div style="font-size:2rem; margin-bottom:8px;">📥</div>
+            <h3 style="font-size:0.95rem; margin-bottom:8px;">Save Tournament</h3>
+            <p style="font-size:0.75rem; color:var(--text-muted); margin-bottom:12px;">
+                Full save — teams, players, stats, fixtures, results, knockouts. Resume anytime.
+            </p>
+            <button onclick="exportTournament(); closePopup();" ${!hasTournament ? 'disabled style="opacity:0.5;"' : ''}>
+                💾 Download Save
+            </button>
+        </div>
+        <div style="background:var(--glass); border:1px solid var(--glass-border); border-radius:var(--radius-md); padding:20px; text-align:center;">
+            <div style="font-size:2rem; margin-bottom:8px;">📤</div>
+            <h3 style="font-size:0.95rem; margin-bottom:8px;">Load Tournament</h3>
+            <p style="font-size:0.75rem; color:var(--text-muted); margin-bottom:12px;">
+                Open a previously saved tournament file and pick up where you left off.
+            </p>
+            <button onclick="closePopup(); importTournament();">
+                📂 Open File
+            </button>
+        </div>
+    </div>
+
+    <div style="border-top:1px solid var(--border-light); padding-top:16px; margin-bottom:16px;">
+        <h3 style="font-size:0.95rem; text-align:center; margin-bottom:12px;">📋 Roster Only (No Stats)</h3>
+        <div style="display:grid; grid-template-columns: 1fr 1fr; gap:16px;">
+            <div style="background:var(--glass); border:1px solid var(--glass-border); border-radius:var(--radius-md); padding:16px; text-align:center;">
+                <p style="font-size:0.75rem; color:var(--text-muted); margin-bottom:10px;">
+                    Export just teams & players — no stats, no results. Share your roster!
+                </p>
+                <button class="btn-secondary" onclick="exportRosterData(); closePopup();" ${!hasTournament ? 'disabled style="opacity:0.5;"' : ''}>
+                    📤 Export Roster
+                </button>
+            </div>
+            <div style="background:var(--glass); border:1px solid var(--glass-border); border-radius:var(--radius-md); padding:16px; text-align:center;">
+                <p style="font-size:0.75rem; color:var(--text-muted); margin-bottom:10px;">
+                    Import a roster file to start a fresh league with those exact teams & players.
+                </p>
+                <button class="btn-secondary" onclick="closePopup(); importRosterData();">
+                    📥 Import Roster
+                </button>
+            </div>
+        </div>
+    </div>
+
+    <button onclick="closePopup()" style="width:100%; margin-top:12px;">Close</button>`;
+
+    showPopup(html);
 }
