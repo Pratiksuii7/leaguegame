@@ -1222,7 +1222,9 @@ function confirmSimResult() {
 
 // ---- INTEGRATION: Launch sim for league match ----
 function simulateNextMatchVisual() {
-    if (currentMatchIndex >= fixtures.length) return;
+    // Find the next unplayed match dynamically
+    currentMatchIndex = fixtures.findIndex(f => !f.played);
+    if (currentMatchIndex === -1) return;
     const match = fixtures[currentMatchIndex];
 
     openMatchSimulation(match.home, match.away, {
@@ -1236,8 +1238,6 @@ function simulateNextMatchVisual() {
             // Stats are already updated on player objects during simulation (goals, assists, cards, passes)
             // We just need to update team stats
             updateTeamStats(match);
-
-            currentMatchIndex++;
             
             matchHistory.push({
                 homeTeam: match.home.name,
@@ -1249,6 +1249,7 @@ function simulateNextMatchVisual() {
 
             renderCurrentMatch();
             renderLeagueTable();
+            updateMatchCounter();
             checkSeasonEnd();
         }
     });

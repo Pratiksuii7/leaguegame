@@ -1,0 +1,1001 @@
+/* ============================================
+   RESPONSIVENESS.CSS
+   Universal responsiveness for ALL devices
+   320px → 3840px+ (4K/UHD)
+   ============================================ */
+
+/* ============================================
+   ULTRA SMALL PHONES (320px – 374px)
+   iPhone SE, Galaxy S mini, older devices
+   ============================================ */
+@media (max-width: 374px) {
+    html { font-size: 13px; }
+
+    .app-header {
+        padding: 8px 12px;
+    }
+
+    .brand-text {
+        font-size: 0.8rem;
+        letter-spacing: 0.5px;
+    }
+
+    .brand-icon { font-size: 1.2rem; }
+
+    #mainContent {
+        padding: 12px 8px 24px;
+    }
+
+    .action-grid {
+        grid-template-columns: repeat(3, 1fr);
+        gap: 6px;
+    }
+
+    .action-card {
+        padding: 10px 4px;
+        min-height: 65px;
+    }
+
+    .action-card .action-icon { font-size: 1.2rem; }
+    .action-card .action-label { font-size: 0.6rem; }
+
+    .setup-card {
+        margin: 16px auto;
+        padding: 16px;
+        border-radius: 12px;
+    }
+
+    .team-name-grid {
+        grid-template-columns: 1fr;
+    }
+
+    .content-grid {
+        grid-template-columns: 1fr;
+    }
+
+    table { font-size: 0.7rem; }
+    th, td { padding: 4px 3px; }
+    th { font-size: 0.6rem; }
+
+    button {
+        padding: 8px 12px;
+        font-size: 0.75rem;
+    }
+
+    .popup-overlay { padding: 8px; }
+
+    .popup-content {
+        padding: 14px;
+        border-radius: 12px;
+        max-height: 90vh;
+    }
+
+    .roster-grid {
+        grid-template-columns: 1fr;
+        gap: 12px;
+    }
+
+    .team-card { padding: 12px; }
+
+    .roster-table { font-size: 0.65rem; }
+    .roster-table th, .roster-table td { padding: 3px 2px; }
+
+    .theme-grid {
+        grid-template-columns: repeat(2, 1fr);
+        gap: 8px;
+    }
+
+    .tab-buttons button {
+        font-size: 0.65rem;
+        padding: 6px 8px;
+    }
+
+    .match-card { padding: 14px; }
+
+    .match-vs strong { font-size: 0.9rem; }
+
+    .match-inputs {
+        flex-direction: column;
+        align-items: stretch;
+    }
+
+    .match-inputs .input-group { min-width: auto; }
+
+    .match-actions { flex-direction: column; }
+    .match-actions button { width: 100%; }
+
+    .team-mgmt .form-row {
+        flex-direction: column;
+    }
+
+    .team-mgmt .form-row button {
+        width: 100%;
+        margin-bottom: 8px;
+    }
+}
+
+/* ============================================
+   SMALL PHONES (375px – 479px)
+   iPhone X/11/12/13/14/15, Galaxy S series
+   ============================================ */
+@media (min-width: 375px) and (max-width: 479px) {
+    html { font-size: 14px; }
+
+    .app-header {
+        padding: 10px 14px;
+    }
+
+    .brand-text { font-size: 0.85rem; }
+
+    #mainContent {
+        padding: 14px 10px 28px;
+    }
+
+    .action-grid {
+        grid-template-columns: repeat(3, 1fr);
+        gap: 8px;
+    }
+
+    .action-card {
+        padding: 12px 6px;
+        min-height: 70px;
+    }
+
+    .action-card .action-icon { font-size: 1.3rem; }
+    .action-card .action-label { font-size: 0.65rem; }
+
+    .setup-card {
+        margin: 20px auto;
+        padding: 20px;
+    }
+
+    .team-name-grid {
+        grid-template-columns: 1fr;
+    }
+
+    .content-grid {
+        grid-template-columns: 1fr;
+    }
+
+    table { font-size: 0.75rem; }
+    th, td { padding: 6px 4px; }
+
+    button {
+        padding: 9px 14px;
+        font-size: 0.8rem;
+    }
+
+    .roster-grid {
+        grid-template-columns: 1fr;
+        gap: 14px;
+    }
+
+    .theme-grid {
+        grid-template-columns: repeat(2, 1fr);
+        gap: 10px;
+    }
+
+    .team-mgmt .form-row {
+        flex-direction: column;
+    }
+
+    .team-mgmt .form-row button {
+        width: 100%;
+        margin-bottom: 8px;
+    }
+
+    .match-actions { flex-direction: column; }
+    .match-actions button { width: 100%; }
+}
+
+/* ============================================
+   LARGE PHONES (480px – 639px)
+   iPhone Plus/Max, Galaxy S Ultra, Pixel XL
+   ============================================ */
+@media (min-width: 480px) and (max-width: 639px) {
+    html { font-size: 15px; }
+
+    #mainContent {
+        padding: 16px 14px 32px;
+    }
+
+    .action-grid {
+        grid-template-columns: repeat(4, 1fr);
+        gap: 8px;
+    }
+
+    .action-card {
+        padding: 12px 6px;
+        min-height: 75px;
+    }
+
+    .content-grid {
+        grid-template-columns: 1fr;
+    }
+
+    .setup-card { padding: 24px; }
+
+    .team-name-grid {
+        grid-template-columns: 1fr 1fr;
+    }
+
+    .roster-grid {
+        grid-template-columns: 1fr;
+        gap: 16px;
+    }
+
+    .theme-grid {
+        grid-template-columns: repeat(3, 1fr);
+    }
+
+    .match-actions {
+        flex-wrap: wrap;
+    }
+}
+
+/* ============================================
+   SMALL TABLETS (640px – 767px)
+   iPad Mini, Galaxy Tab, Fire HD
+   ============================================ */
+@media (min-width: 640px) and (max-width: 767px) {
+    html { font-size: 15px; }
+
+    #mainContent {
+        padding: 18px 16px 36px;
+    }
+
+    .action-grid {
+        grid-template-columns: repeat(4, 1fr);
+        gap: 10px;
+    }
+
+    .content-grid {
+        grid-template-columns: 1fr 1fr;
+    }
+
+    .team-name-grid {
+        grid-template-columns: 1fr 1fr;
+    }
+
+    .roster-grid {
+        grid-template-columns: 1fr;
+        gap: 18px;
+    }
+
+    .theme-grid {
+        grid-template-columns: repeat(3, 1fr);
+    }
+}
+
+/* ============================================
+   TABLETS PORTRAIT (768px – 1023px)
+   iPad, iPad Air, Galaxy Tab S, Surface Go
+   ============================================ */
+@media (min-width: 768px) and (max-width: 1023px) {
+    html { font-size: 16px; }
+
+    #mainContent {
+        padding: 20px 20px 40px;
+    }
+
+    .action-grid {
+        grid-template-columns: repeat(5, 1fr);
+        gap: 10px;
+    }
+
+    .action-card { min-height: 80px; }
+
+    .content-grid {
+        grid-template-columns: 1fr 1fr;
+    }
+
+    .roster-grid {
+        grid-template-columns: 1fr 1fr;
+        gap: 18px;
+    }
+
+    .theme-grid {
+        grid-template-columns: repeat(3, 1fr);
+    }
+}
+
+/* ============================================
+   SMALL DESKTOPS / TABLETS LANDSCAPE
+   (1024px – 1279px)
+   iPad Pro, Surface, small laptops
+   ============================================ */
+@media (min-width: 1024px) and (max-width: 1279px) {
+    html { font-size: 16px; }
+
+    #mainContent {
+        padding: 24px 24px 48px;
+        max-width: 1100px;
+    }
+
+    .action-grid {
+        grid-template-columns: repeat(6, 1fr);
+        gap: 10px;
+    }
+
+    .roster-grid {
+        grid-template-columns: 1fr 1fr;
+    }
+
+    .theme-grid {
+        grid-template-columns: repeat(3, 1fr);
+        gap: 14px;
+    }
+}
+
+/* ============================================
+   STANDARD DESKTOPS (1280px – 1535px)
+   13" – 15" laptops, standard monitors
+   ============================================ */
+@media (min-width: 1280px) and (max-width: 1535px) {
+    html { font-size: 16px; }
+
+    #mainContent {
+        max-width: 1200px;
+    }
+
+    .action-grid {
+        grid-template-columns: repeat(6, 1fr);
+        gap: 12px;
+    }
+
+    .action-card { min-height: 85px; }
+
+    .theme-grid {
+        grid-template-columns: repeat(3, 1fr);
+    }
+}
+
+/* ============================================
+   LARGE DESKTOPS (1536px – 1919px)
+   15" – 17" laptops, 24" monitors
+   ============================================ */
+@media (min-width: 1536px) and (max-width: 1919px) {
+    html { font-size: 17px; }
+
+    #mainContent {
+        max-width: 1300px;
+        padding: 28px 32px 52px;
+    }
+
+    .action-grid {
+        grid-template-columns: repeat(6, 1fr);
+        gap: 14px;
+    }
+
+    .action-card { min-height: 90px; }
+
+    .popup-content {
+        max-width: 1000px;
+    }
+}
+
+/* ============================================
+   FULL HD MONITORS (1920px – 2559px)
+   1080p monitors, Full HD TVs
+   ============================================ */
+@media (min-width: 1920px) and (max-width: 2559px) {
+    html { font-size: 18px; }
+
+    #mainContent {
+        max-width: 1400px;
+        padding: 32px 40px 60px;
+    }
+
+    .app-header {
+        padding: 16px 40px;
+    }
+
+    .action-grid {
+        grid-template-columns: repeat(6, 1fr);
+        gap: 16px;
+    }
+
+    .action-card {
+        min-height: 95px;
+        padding: 18px 12px;
+    }
+
+    .action-card .action-icon { font-size: 1.8rem; }
+    .action-card .action-label { font-size: 0.8rem; }
+
+    .popup-content {
+        max-width: 1100px;
+        padding: 36px;
+    }
+
+    .setup-card {
+        max-width: 700px;
+    }
+
+    .roster-grid { gap: 24px; }
+}
+
+/* ============================================
+   QHD / 2K MONITORS (2560px – 3839px)
+   1440p monitors, iMac 5K, ultra-wide
+   ============================================ */
+@media (min-width: 2560px) and (max-width: 3839px) {
+    html { font-size: 20px; }
+
+    #mainContent {
+        max-width: 1600px;
+        padding: 40px 48px 70px;
+    }
+
+    .app-header {
+        padding: 18px 48px;
+    }
+
+    .brand-icon { font-size: 2rem; }
+    .brand-text { font-size: 1.5rem; }
+
+    .action-grid {
+        grid-template-columns: repeat(6, 1fr);
+        gap: 18px;
+    }
+
+    .action-card {
+        min-height: 110px;
+        padding: 22px 16px;
+        border-radius: 14px;
+    }
+
+    .action-card .action-icon { font-size: 2rem; }
+    .action-card .action-label { font-size: 0.85rem; }
+
+    .popup-content {
+        max-width: 1300px;
+        padding: 40px;
+    }
+
+    .setup-card { max-width: 800px; }
+
+    table { font-size: 1rem; }
+    th, td { padding: 14px 16px; }
+
+    button {
+        padding: 14px 28px;
+        font-size: 1rem;
+        border-radius: 12px;
+    }
+}
+
+/* ============================================
+   4K / UHD DISPLAYS (3840px+)
+   4K TVs, 4K monitors, Samsung/LG smart TVs
+   ============================================ */
+@media (min-width: 3840px) {
+    html { font-size: 24px; }
+
+    #mainContent {
+        max-width: 2200px;
+        padding: 50px 60px 80px;
+    }
+
+    .app-header {
+        padding: 24px 60px;
+    }
+
+    .brand-icon { font-size: 2.5rem; }
+    .brand-text { font-size: 1.8rem; }
+
+    .action-grid {
+        grid-template-columns: repeat(6, 1fr);
+        gap: 24px;
+    }
+
+    .action-card {
+        min-height: 130px;
+        padding: 28px 20px;
+        border-radius: 18px;
+    }
+
+    .action-card .action-icon { font-size: 2.5rem; }
+    .action-card .action-label { font-size: 0.9rem; }
+
+    .popup-content {
+        max-width: 1800px;
+        padding: 48px;
+        border-radius: 24px;
+    }
+
+    .setup-card {
+        max-width: 1000px;
+        border-radius: 28px;
+    }
+
+    table { font-size: 1.1rem; }
+    th, td { padding: 16px 20px; }
+
+    button {
+        padding: 18px 36px;
+        font-size: 1.1rem;
+        border-radius: 14px;
+    }
+
+    input[type="text"],
+    input[type="number"],
+    select {
+        padding: 14px 18px;
+        font-size: 1.1rem;
+        border-radius: 12px;
+    }
+}
+
+/* ============================================
+   ULTRA-WIDE MONITORS (21:9 and wider)
+   ============================================ */
+@media (min-aspect-ratio: 21/9) and (min-width: 2560px) {
+    #mainContent {
+        max-width: 1500px;
+        margin: 0 auto;
+    }
+
+    .popup-content {
+        max-width: 1200px;
+    }
+
+    .content-grid {
+        grid-template-columns: 1fr 1fr;
+    }
+}
+
+/* ============================================
+   LANDSCAPE PHONES
+   ============================================ */
+@media (max-height: 500px) and (orientation: landscape) {
+    .app-header {
+        padding: 6px 16px;
+    }
+
+    .brand-icon { font-size: 1.2rem; }
+    .brand-text { font-size: 0.85rem; }
+
+    #mainContent {
+        padding: 10px 16px 20px;
+    }
+
+    .action-grid {
+        grid-template-columns: repeat(6, 1fr);
+        gap: 6px;
+    }
+
+    .action-card {
+        padding: 8px 4px;
+        min-height: 55px;
+    }
+
+    .action-card .action-icon { font-size: 1.1rem; }
+    .action-card .action-label { font-size: 0.55rem; }
+
+    .setup-card {
+        margin: 8px auto;
+        padding: 16px;
+    }
+
+    .popup-content {
+        max-height: 95vh;
+    }
+
+    h2 { font-size: 1.1rem; }
+}
+
+/* ============================================
+   TABLET LANDSCAPE SPECIFIC
+   ============================================ */
+@media (min-width: 768px) and (max-width: 1024px) and (orientation: landscape) {
+    .action-grid {
+        grid-template-columns: repeat(6, 1fr);
+    }
+
+    .content-grid {
+        grid-template-columns: 1fr 1fr;
+    }
+}
+
+/* ============================================
+   TOUCH DEVICE OPTIMIZATIONS
+   ============================================ */
+@media (hover: none) and (pointer: coarse) {
+    /* Larger touch targets */
+    .action-card {
+        min-height: 75px;
+    }
+
+    button {
+        min-height: 44px;
+        min-width: 44px;
+    }
+
+    input[type="text"],
+    input[type="number"],
+    select {
+        min-height: 44px;
+        font-size: max(16px, 0.95rem); /* Prevent iOS zoom */
+    }
+
+    /* Remove hover transforms on touch */
+    .action-card:hover {
+        transform: none;
+    }
+
+    .action-card:active {
+        transform: scale(0.96);
+        background: var(--accent-dim);
+    }
+
+    button:hover:not(:disabled) {
+        transform: none;
+    }
+
+    button:active:not(:disabled) {
+        transform: scale(0.97);
+    }
+
+    .section:hover, .card:hover {
+        transform: none;
+    }
+
+    .team-row:hover {
+        transform: none;
+    }
+
+    /* Smoother scrolling */
+    .popup-content,
+    .sim-events {
+        -webkit-overflow-scrolling: touch;
+    }
+
+    /* Larger scrollbar for touch */
+    ::-webkit-scrollbar { width: 4px; }
+}
+
+/* ============================================
+   FINE POINTER (mouse users)
+   ============================================ */
+@media (hover: hover) and (pointer: fine) {
+    /* All hover effects are already in style.css */
+    /* Add subtle cursor enhancements */
+    .action-card { cursor: pointer; }
+    .team-row { cursor: pointer; }
+}
+
+/* ============================================
+   HIGH CONTRAST MODE
+   ============================================ */
+@media (prefers-contrast: high) {
+    :root {
+        --border: var(--text-primary);
+        --glass-border: var(--text-primary);
+    }
+
+    .action-card {
+        border-width: 2px;
+    }
+
+    button {
+        border: 2px solid currentColor;
+    }
+
+    th {
+        border-bottom: 2px solid var(--accent);
+    }
+
+    input, select {
+        border-width: 2px;
+    }
+}
+
+/* ============================================
+   REDUCED MOTION
+   ============================================ */
+@media (prefers-reduced-motion: reduce) {
+    *, *::before, *::after {
+        animation-duration: 0.01ms !important;
+        animation-iteration-count: 1 !important;
+        transition-duration: 0.01ms !important;
+        scroll-behavior: auto !important;
+    }
+}
+
+/* ============================================
+   DARK MODE SYSTEM PREFERENCE HINT
+   ============================================ */
+@media (prefers-color-scheme: light) {
+    /* Arctic theme auto-suggested for light mode users */
+    body:not([data-theme]) {
+        color-scheme: light;
+    }
+}
+
+/* ============================================
+   PRINT STYLES
+   ============================================ */
+@media print {
+    .app-header,
+    .action-grid,
+    .match-actions,
+    .team-mgmt,
+    #siteFooter,
+    button,
+    .header-btn {
+        display: none !important;
+    }
+
+    body {
+        background: white !important;
+        color: black !important;
+        font-size: 12pt;
+    }
+
+    #mainContent {
+        max-width: 100%;
+        padding: 0;
+    }
+
+    table {
+        border: 1px solid #000;
+        box-shadow: none;
+    }
+
+    th, td {
+        border: 1px solid #333;
+        color: #000;
+        background: transparent !important;
+    }
+
+    th {
+        background: #ddd !important;
+        color: #000;
+    }
+
+    .popup-overlay { display: none !important; }
+}
+
+/* ============================================
+   MATCH SIMULATION POPUP — RESPONSIVE
+   (extends matchSim.css)
+   ============================================ */
+
+/* Small phones */
+@media (max-width: 479px) {
+    .sim-container {
+        width: 100vw;
+        max-width: 100vw;
+        border-radius: 0;
+        max-height: 100vh;
+    }
+
+    .sim-header {
+        padding: 8px 8px 6px;
+        gap: 6px;
+    }
+
+    .sim-team-name {
+        font-size: 0.7rem;
+        min-width: 60px;
+    }
+
+    .sim-score {
+        font-size: 1.4rem;
+        min-width: 28px;
+    }
+
+    .sim-score-box {
+        padding: 4px 10px;
+        gap: 6px;
+    }
+
+    .sim-timer {
+        font-size: 0.7rem;
+        padding: 2px 8px;
+    }
+
+    .sim-controls {
+        gap: 3px;
+        padding: 6px 8px;
+    }
+
+    .sim-controls button {
+        font-size: 0.55rem;
+        padding: 4px 6px;
+    }
+
+    .sim-lineups {
+        grid-template-columns: 1fr;
+        gap: 8px;
+        padding: 8px 10px;
+    }
+
+    .sim-lineup-player {
+        font-size: 0.65rem;
+    }
+
+    .sim-events {
+        max-height: 60px;
+        padding: 4px 10px;
+    }
+
+    .sim-event-item { font-size: 0.7rem; }
+
+    .sim-result-title { font-size: 1.2rem; }
+    .sim-result-score { font-size: 2rem; }
+    .sim-result-card { padding: 20px; }
+
+    /* Penalty popup */
+    .penalty-container {
+        width: 95vw;
+        padding: 16px;
+        border-radius: 12px;
+    }
+
+    .penalty-title { font-size: 1.1rem; }
+    .penalty-score-num { font-size: 2rem; }
+    .penalty-team-name { font-size: 0.85rem; }
+    .penalty-kick-cell { font-size: 0.7rem; padding: 4px 6px; }
+    .penalty-kick-name { font-size: 0.6rem; }
+}
+
+/* Tablets */
+@media (min-width: 480px) and (max-width: 767px) {
+    .sim-container {
+        width: 98vw;
+        border-radius: 10px;
+    }
+
+    .sim-header { padding: 10px 12px 8px; }
+    .sim-team-name { font-size: 0.85rem; }
+    .sim-score { font-size: 1.8rem; }
+
+    .sim-controls button { font-size: 0.65rem; }
+
+    .sim-lineups {
+        grid-template-columns: 1fr;
+    }
+
+    .penalty-container {
+        width: 92vw;
+        padding: 20px;
+    }
+}
+
+/* Medium screens */
+@media (min-width: 768px) and (max-width: 1023px) {
+    .sim-container {
+        width: 95vw;
+        max-width: 900px;
+    }
+
+    .sim-lineups {
+        grid-template-columns: 1fr 1fr;
+    }
+}
+
+/* ============================================
+   SMART TV OPTIMIZATIONS (10-foot UI)
+   Large screens viewed from distance
+   ============================================ */
+@media (min-width: 1920px) and (min-height: 900px) {
+    /* Assume TV-like viewing distance — larger text & targets */
+    .action-card {
+        min-height: 100px;
+        border-radius: 14px;
+    }
+
+    .action-card .action-icon { font-size: 2rem; }
+
+    button {
+        min-height: 50px;
+        font-size: 1rem;
+    }
+
+    th, td {
+        font-size: 0.95rem;
+    }
+}
+
+/* Smart TV specific (very large screens) */
+@media (min-width: 3000px) and (min-height: 1500px) {
+    html { font-size: 22px; }
+
+    .action-card {
+        min-height: 120px;
+        padding: 24px 16px;
+    }
+
+    .action-card .action-icon { font-size: 2.4rem; }
+    .action-card .action-label { font-size: 0.9rem; }
+
+    button {
+        min-height: 56px;
+        padding: 16px 32px;
+        font-size: 1.05rem;
+    }
+
+    input[type="text"],
+    input[type="number"],
+    select {
+        min-height: 56px;
+        font-size: 1.05rem;
+    }
+}
+
+/* ============================================
+   FOLDABLE DEVICES
+   Galaxy Fold, etc (narrow when folded)
+   ============================================ */
+@media (max-width: 300px) {
+    html { font-size: 12px; }
+
+    .action-grid {
+        grid-template-columns: repeat(2, 1fr);
+        gap: 4px;
+    }
+
+    .action-card {
+        padding: 8px 4px;
+        min-height: 55px;
+    }
+
+    .action-card .action-icon { font-size: 1rem; }
+    .action-card .action-label { font-size: 0.55rem; }
+
+    .brand-text { display: none; }
+
+    .setup-card { padding: 12px; }
+
+    .theme-grid { grid-template-columns: 1fr 1fr; }
+
+    table { font-size: 0.6rem; }
+    th, td { padding: 3px 2px; }
+}
+
+/* ============================================
+   SAFE AREA INSETS (iPhone notch, etc.)
+   ============================================ */
+@supports (padding: env(safe-area-inset-top)) {
+    .app-header {
+        padding-top: max(12px, env(safe-area-inset-top));
+        padding-left: max(24px, env(safe-area-inset-left));
+        padding-right: max(24px, env(safe-area-inset-right));
+    }
+
+    #mainContent {
+        padding-left: max(20px, env(safe-area-inset-left));
+        padding-right: max(20px, env(safe-area-inset-right));
+    }
+
+    #siteFooter {
+        padding-bottom: max(20px, env(safe-area-inset-bottom));
+    }
+}
+
+/* ============================================
+   CONTAINER QUERY SUPPORT (progressive)
+   ============================================ */
+@supports (container-type: inline-size) {
+    #app {
+        container-type: inline-size;
+    }
+
+    @container (max-width: 500px) {
+        .content-grid {
+            grid-template-columns: 1fr;
+        }
+
+        .action-grid {
+            grid-template-columns: repeat(3, 1fr);
+        }
+    }
+
+    @container (min-width: 800px) {
+        .action-grid {
+            grid-template-columns: repeat(6, 1fr);
+        }
+    }
+}

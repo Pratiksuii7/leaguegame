@@ -551,8 +551,8 @@
     50% { opacity: 0.5; }
 }
 
-/* --- RESPONSIVE --- */
-@media (max-width: 768px) {
+/* --- RESPONSIVE (base sim overrides for mobile) --- */
+@media (max-width: 767px) {
     .sim-container {
         width: 100vw;
         max-width: 100vw;
@@ -561,29 +561,48 @@
     }
 
     .sim-header {
-        padding: 12px 10px 8px;
-        gap: 10px;
+        padding: 10px 10px 8px;
+        gap: 8px;
     }
 
     .sim-team-name {
-        font-size: 0.9rem;
-        min-width: 80px;
+        font-size: 0.85rem;
+        min-width: 70px;
     }
 
     .sim-score {
-        font-size: 1.8rem;
+        font-size: 1.6rem;
+    }
+
+    .sim-score-box {
+        padding: 6px 14px;
+        gap: 8px;
+    }
+
+    .sim-timer {
+        font-size: 0.8rem;
     }
 
     .sim-lineups {
         grid-template-columns: 1fr;
+        gap: 10px;
     }
 
     .sim-controls {
         gap: 4px;
+        padding: 8px 10px;
     }
 
     .sim-controls button {
-        font-size: 0.65rem;
+        font-size: 0.6rem;
         padding: 5px 8px;
     }
+
+    .sim-events {
+        max-height: 70px;
+    }
+
+    .sim-result-card { padding: 24px; }
+    .sim-result-title { font-size: 1.3rem; }
+    .sim-result-score { font-size: 2.2rem; }
 }

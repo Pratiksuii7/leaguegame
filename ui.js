@@ -3,11 +3,14 @@ const app = document.getElementById("app");
 // --- SETUP UI ---
 function renderSetup() {
   app.innerHTML = `
-    <h2>Step 1: Setup</h2>
-    <label>Number of Teams (max ${maxTeams}):</label>
-    <input type="number" id="teamCount" min="2" max="${maxTeams}" value="8" oninput="renderTeamNameInputs()">
-    <div id="teamNamesContainer"></div>
-    <button onclick="startLeague()">Generate Teams & Players</button>
+    <div class="setup-card">
+      <h2>🏆 Create Your League</h2>
+      <p class="setup-subtitle">Set up your tournament and compete for glory</p>
+      <label>Number of Teams (max ${maxTeams})</label>
+      <input type="number" id="teamCount" min="2" max="${maxTeams}" value="8" oninput="renderTeamNameInputs()">
+      <div id="teamNamesContainer"></div>
+      <button onclick="startLeague()">🚀 Generate Teams & Start</button>
+    </div>
   `;
   renderTeamNameInputs();
 }
@@ -20,13 +23,16 @@ function renderTeamNameInputs() {
     return;
   }
 
-  let html = `<h3>Enter Team Names</h3>`;
+  let html = `<h3 style="margin-bottom:12px;">Enter Team Names</h3><div class="team-name-grid">`;
   for (let i = 0; i < count; i++) {
     html += `
-      <label>Team ${i + 1} Name:</label>
-      <input type="text" id="teamNameInput${i}" value="Team ${i + 1}">
+      <div>
+        <label>Team ${i + 1}</label>
+        <input type="text" id="teamNameInput${i}" value="Team ${i + 1}">
+      </div>
     `;
   }
+  html += `</div>`;
   container.innerHTML = html;
 }
 
@@ -52,36 +58,81 @@ function startLeague() {
 // --- LEAGUE UI ---
 function renderLeagueUI() {
   app.innerHTML = `
-    <h2>League Matches & Table</h2>
-    <div class="match-simulation">
-      <button onclick="simulateNextMatch()">Simulate Next Match</button>
-      <button onclick="simulateNextMatchVisual()" style="background:#2d6a4f; color:white;">▶ Watch Next Match</button>
-      <button onclick="simulateAllMatches()">Simulate All Remaining</button>
-      <button onclick="startKnockouts()">Start Knockouts</button>
-      <button onclick="showLeagueStats()">View League Stats/Awards</button>
-      <button onclick="renderPlayerListUI()">Manage Player Database</button>
-      <button onclick="regenerateAllPlayers()">Generate Random Players for All Teams</button>
-      <button onclick="openAddTeamPopup()" style="background:#2d6a4f; color:white;">➕ Add New Team</button>
-      <button onclick="restartLeague()">Restart Tournament</button>
-      <button onclick="viewMatchHistory()">View Match History</button>
-      <button onclick="viewTrophyRoom()">🏆 Trophy Room & Records</button>
+    <div class="dashboard-header">
+      <h2>⚽ League Dashboard</h2>
+      <div class="match-counter">Match ${fixtures.filter(f => f.played).length} / ${fixtures.length}</div>
     </div>
 
-    <div class="team-management">
-      <h3>Team Management</h3>
-      <label>Choose Team:</label>
-      <select id="teamSelect">
-        ${teams.map((t) => `<option value="${t.id}">${t.name}</option>`).join("")}
-      </select>
-
-      <button onclick="generateRandomPlayersForSelectedTeam()">Generate Random Players for Selected Team</button>
-
-      <h4>Add New Player to Selected Team</h4>
-      <input type="text" id="newPlayerName" placeholder="Player Name">
-      <button onclick="addPlayerToSelectedTeam()">Add Player</button>
+    <div class="action-grid">
+      <div class="action-card" onclick="simulateNextMatch()">
+        <div class="action-icon">⚡</div>
+        <div class="action-label">Sim Next</div>
+      </div>
+      <div class="action-card primary" onclick="simulateNextMatchVisual()">
+        <div class="action-icon">▶️</div>
+        <div class="action-label">Watch Match</div>
+      </div>
+      <div class="action-card" onclick="simulateAllMatches()">
+        <div class="action-icon">⏩</div>
+        <div class="action-label">Sim All</div>
+      </div>
+      <div class="action-card" onclick="startKnockouts()">
+        <div class="action-icon">🏆</div>
+        <div class="action-label">Knockouts</div>
+      </div>
+      <div class="action-card" onclick="showLeagueStats()">
+        <div class="action-icon">📊</div>
+        <div class="action-label">Stats</div>
+      </div>
+      <div class="action-card" onclick="renderPlayerListUI()">
+        <div class="action-icon">👥</div>
+        <div class="action-label">Players</div>
+      </div>
+      <div class="action-card success" onclick="openAddTeamPopup()">
+        <div class="action-icon">➕</div>
+        <div class="action-label">Add Team</div>
+      </div>
+      <div class="action-card" onclick="regenerateAllPlayers()">
+        <div class="action-icon">🎲</div>
+        <div class="action-label">Regen All</div>
+      </div>
+      <div class="action-card" onclick="viewMatchHistory()">
+        <div class="action-icon">📜</div>
+        <div class="action-label">History</div>
+      </div>
+      <div class="action-card" onclick="viewTrophyRoom()">
+        <div class="action-icon">🏅</div>
+        <div class="action-label">Trophies</div>
+      </div>
+      <div class="action-card danger" onclick="restartLeague()">
+        <div class="action-icon">🔄</div>
+        <div class="action-label">Restart</div>
+      </div>
     </div>
 
-    <div id="currentMatch"></div>
+    <div class="content-grid">
+      <div id="currentMatch"></div>
+      <div class="team-mgmt">
+        <div class="section-title">⚙️ Team Management</div>
+        <div class="form-row">
+          <div style="flex:1;">
+            <label>Select Team</label>
+            <select id="teamSelect">
+              ${teams.map((t) => `<option value="${t.id}">${t.name}</option>`).join("")}
+            </select>
+          </div>
+          <button class="btn-secondary" onclick="generateRandomPlayersForSelectedTeam()">🎲 Regen</button>
+        </div>
+        <div class="form-row">
+          <div style="flex:1;">
+            <label>Add Player</label>
+            <input type="text" id="newPlayerName" placeholder="Player Name">
+          </div>
+          <button class="btn-secondary" onclick="addPlayerToSelectedTeam()">➕ Add</button>
+        </div>
+      </div>
+    </div>
+
     <div id="leagueTable"></div>
   `;
 
@@ -91,20 +142,37 @@ function renderLeagueUI() {
 
 function renderCurrentMatch() {
   const c = document.getElementById("currentMatch");
-  if (currentMatchIndex >= fixtures.length) {
-    c.innerHTML = `<h3>All matches completed!</h3>`;
+  // Always find the next unplayed match dynamically
+  currentMatchIndex = fixtures.findIndex(f => !f.played);
+  if (currentMatchIndex === -1) {
+    currentMatchIndex = fixtures.length;
+    c.innerHTML = `<div class="match-card"><h3>✅ All matches completed!</h3><p class="text-muted" style="margin-top:8px;">Start the knockout stage to crown a champion.</p></div>`;
     return;
   }
   const m = fixtures[currentMatchIndex];
   c.innerHTML = `
-    <h3>Match ${currentMatchIndex + 1}/${fixtures.length}</h3>
-    <strong>${m.home.name}</strong> vs <strong>${m.away.name}</strong>
-    <label>Home Score:</label>
-    <input id="homeScoreInput" placeholder="Leave empty for random">
-    <label>Away Score:</label>
-    <input id="awayScoreInput" placeholder="Leave empty for random">
-    <button onclick="saveMatchResult()">Save Result & Next</button>
-    <button onclick="simulateNextMatchVisual()" style="background:#2d6a4f; color:white; font-size:0.9rem;">▶ Watch Match</button>
+    <div class="match-card">
+      <h3>Next Match</h3>
+      <div class="match-vs">
+        <strong>${m.home.name}</strong>
+        <span class="vs-text">vs</span>
+        <strong>${m.away.name}</strong>
+      </div>
+      <div class="match-inputs">
+        <div class="input-group">
+          <label>${m.home.name}</label>
+          <input id="homeScoreInput" type="number" min="0" placeholder="Auto">
+        </div>
+        <div class="input-group">
+          <label>${m.away.name}</label>
+          <input id="awayScoreInput" type="number" min="0" placeholder="Auto">
+        </div>
+      </div>
+      <div class="match-actions">
+        <button onclick="saveMatchResult()">💾 Save</button>
+        <button class="btn-success" onclick="simulateNextMatchVisual()">▶ Watch</button>
+      </div>
+    </div>
   `;
 }
 
@@ -129,8 +197,8 @@ function renderLeagueTable() {
         ? (t.players.reduce((sum, p) => sum + (p.rating || 70), 0) / t.players.length).toFixed(0)
         : "-";
 
-    html += `<tr class="team-row" style="background-color:${t.color}; color:white;" onclick="showTeamStats(${t.id})">
-      <td>${i + 1}</td><td>${t.name}</td><td>${avgRating}</td>
+    html += `<tr class="team-row" style="border-left: 4px solid ${t.color};" onclick="showTeamStats(${t.id})">
+      <td>${i + 1}</td><td><span style="color:${t.color}; font-weight:700;">●</span> ${t.name}</td><td>${avgRating}</td>
       <td>${t.stats.played}</td><td>${t.stats.wins}</td><td>${t.stats.draws}</td><td>${t.stats.losses}</td>
       <td>${t.stats.goalsFor}</td><td>${t.stats.goalsAgainst}</td><td>${gd}</td><td>${t.stats.points}</td>
     </tr>`;
@@ -139,9 +207,20 @@ function renderLeagueTable() {
   c.innerHTML = html;
 }
 
+// Helper to update match counter without full re-render
+function updateMatchCounter() {
+  const counter = document.querySelector('.match-counter');
+  if (counter) {
+    const played = fixtures.filter(f => f.played).length;
+    counter.textContent = `Match ${played} / ${fixtures.length}`;
+  }
+}
+
 // --- ACTIONS ---
 function simulateNextMatch() {
-  if (currentMatchIndex >= fixtures.length) return;
+  // Find the next unplayed match dynamically
+  currentMatchIndex = fixtures.findIndex(f => !f.played);
+  if (currentMatchIndex === -1) return;
   const match = fixtures[currentMatchIndex];
   
   const result = calculateMatchScore(match.home, match.away);
@@ -151,9 +230,6 @@ function simulateNextMatch() {
   match.played = true;
   updateTeamStats(match);
   distributePlayerStats(match, match.homeScore, match.awayScore);
-  currentMatchIndex++;
-  renderCurrentMatch();
-  renderLeagueTable();
   matchHistory.push({
     homeTeam: match.home.name,
     awayTeam: match.away.name,
@@ -161,23 +237,32 @@ function simulateNextMatch() {
     awayScore: match.awayScore,
   });
   localStorage.setItem("matchHistory", JSON.stringify(matchHistory));
+  renderCurrentMatch();
+  renderLeagueTable();
+  updateMatchCounter();
   checkSeasonEnd();
 }
 
 function simulateAllMatches() {
-  while (currentMatchIndex < fixtures.length) simulateNextMatch();
+  while (fixtures.some(f => !f.played)) simulateNextMatch();
 }
 
 function saveMatchResult() {
+  // Find the current unplayed match
+  currentMatchIndex = fixtures.findIndex(f => !f.played);
+  if (currentMatchIndex === -1) return alert("No matches left to play!");
+
   const hVal = document.getElementById("homeScoreInput").value;
   const aVal = document.getElementById("awayScoreInput").value;
   const homeScore = hVal === "" ? randomInt(0, 15) : parseInt(hVal);
   const awayScore = aVal === "" ? randomInt(0, 15) : parseInt(aVal);
   if (isNaN(homeScore) || isNaN(awayScore)) return alert("Invalid score!");
+  if (homeScore < 0 || awayScore < 0) return alert("Scores must be non-negative!");
   
   const m = fixtures[currentMatchIndex];
   m.homeScore = homeScore;
   m.awayScore = awayScore;
+  m.played = true;
   matchHistory.push({
     homeTeam: m.home.name,
     awayTeam: m.away.name,
@@ -186,14 +271,12 @@ function saveMatchResult() {
   });
   localStorage.setItem("matchHistory", JSON.stringify(matchHistory));
 
-  if (homeScore < 0 || awayScore < 0) return alert("Scores must be non-negative!");
-
   updateTeamStats(m);
   distributePlayerStats(m, homeScore, awayScore);
 
-  currentMatchIndex++;
   renderCurrentMatch();
   renderLeagueTable();
+  updateMatchCounter();
   checkSeasonEnd();
 }
 
@@ -522,44 +605,89 @@ function renderNextKnockoutMatch() {
   if (knockoutStage < knockoutMatches.length) {
     const m = knockoutMatches[knockoutStage];
     app.innerHTML = `
-      <h2>${m.name}</h2>
-      <p><strong>${m.home.name}</strong> vs <strong>${m.away.name}</strong></p>
-      <label>${m.home.name} Score:</label>
-      <input id="homeScoreInput" type="number" min="0">
-      <label>${m.away.name} Score:</label>
-      <input id="awayScoreInput" type="number" min="0">
-      <button onclick="playKnockoutMatch()">Save Result & Next</button>
-      <button onclick="simulateCurrentKnockoutMatch()">Simulate This Match</button>
-      <button onclick="simulateKnockoutMatchVisual()" style="background:#2d6a4f; color:white;">▶ Watch This Match</button>
-      <button onclick="simulateAllKnockoutMatches()">Simulate All Matches</button>
-      <button onclick="renderPlayerListUI()">Player Database</button>
-      <button onclick="showLeagueStats()">View League Stats</button>
-      <button onclick="viewAwards()">View Team Stats</button>
-      <button onclick="restartLeague()">Restart Tournament</button>
+      <div class="knockout-header">
+        <h2>🥊 ${m.name}</h2>
+      </div>
+
+      <div class="action-grid">
+        <div class="action-card" onclick="playKnockoutMatch()">
+          <div class="action-icon">💾</div>
+          <div class="action-label">Save Result</div>
+        </div>
+        <div class="action-card" onclick="simulateCurrentKnockoutMatch()">
+          <div class="action-icon">⚡</div>
+          <div class="action-label">Simulate</div>
+        </div>
+        <div class="action-card primary" onclick="simulateKnockoutMatchVisual()">
+          <div class="action-icon">▶️</div>
+          <div class="action-label">Watch Match</div>
+        </div>
+        <div class="action-card" onclick="simulateAllKnockoutMatches()">
+          <div class="action-icon">⏩</div>
+          <div class="action-label">Sim All</div>
+        </div>
+        <div class="action-card" onclick="renderPlayerListUI()">
+          <div class="action-icon">👥</div>
+          <div class="action-label">Players</div>
+        </div>
+        <div class="action-card" onclick="showLeagueStats()">
+          <div class="action-icon">📊</div>
+          <div class="action-label">Stats</div>
+        </div>
+        <div class="action-card" onclick="viewAwards()">
+          <div class="action-icon">📋</div>
+          <div class="action-label">Team Stats</div>
+        </div>
+        <div class="action-card danger" onclick="restartLeague()">
+          <div class="action-icon">🔄</div>
+          <div class="action-label">Restart</div>
+        </div>
+      </div>
+
+      <div class="match-card" style="margin-bottom:20px;">
+        <div class="match-vs">
+          <strong>${m.home.name}</strong>
+          <span class="vs-text">vs</span>
+          <strong>${m.away.name}</strong>
+        </div>
+        <div class="match-inputs">
+          <div class="input-group">
+            <label>${m.home.name}</label>
+            <input id="homeScoreInput" type="number" min="0" placeholder="Score">
+          </div>
+          <div class="input-group">
+            <label>${m.away.name}</label>
+            <input id="awayScoreInput" type="number" min="0" placeholder="Score">
+          </div>
+        </div>
+      </div>
+
       <div id="knockoutBracket"></div>
     `;
   } else {
     if (knockoutResults.length === 1) {
       const champion = knockoutResults[0].winner.name;
       
-      // Update the season record with the knockout champion
       if (seasonHistory.length > 0) {
           seasonHistory[seasonHistory.length - 1].knockoutChampion = champion;
           localStorage.setItem("seasonHistory", JSON.stringify(seasonHistory));
       }
       
       app.innerHTML = `
-        <h2>🏆 Champion: ${champion}!</h2>
-        <p style="text-align:center; font-size:1.2em; color:gold;">Congratulations to ${champion} for winning the tournament!</p>
-        <button onclick="restartLeague()">Restart Tournament</button>
-        <button onclick="renderPlayerListUI()">Player Database</button>
-        <button onclick="showLeagueStats()">View League Stats</button>
-        <button onclick="viewAwards()">View Team Stats</button>
-        <button onclick="viewTrophyRoom()">🏆 Trophy Room & Records</button>
+        <div class="champion-card">
+          <h2>🏆 Champion: ${champion}!</h2>
+          <p>Congratulations to ${champion} for winning the tournament!</p>
+          <div class="champion-actions">
+            <button onclick="restartLeague()">🔄 Restart</button>
+            <button class="btn-secondary" onclick="renderPlayerListUI()">👥 Players</button>
+            <button class="btn-secondary" onclick="showLeagueStats()">📊 Stats</button>
+            <button class="btn-secondary" onclick="viewAwards()">📋 Teams</button>
+            <button class="btn-secondary" onclick="viewTrophyRoom()">🏅 Trophies</button>
+          </div>
+        </div>
         <div id="knockoutBracket"></div>
       `;
       
-      // Show the champion alert only after knockouts are fully done
       setTimeout(() => {
           alert(`🏆 Tournament Over! Champion: ${champion}`);
       }, 300);
@@ -808,6 +936,25 @@ function viewAwards() {
 }
 
 // --- PLAYER DATABASE UI ---
+// --- SMART NAVIGATION ---
+function goBack() {
+    // If knockouts are in progress, return to knockout view
+    if (knockoutMatches && knockoutMatches.length > 0) {
+        if (knockoutResults.length === 1 && knockoutStage >= knockoutMatches.length) {
+            // Final result already determined — show champion screen
+            renderNextKnockoutMatch();
+        } else if (knockoutStage < knockoutMatches.length) {
+            // Still playing knockout matches
+            renderNextKnockoutMatch();
+        } else {
+            // Between rounds or other edge case
+            renderNextKnockoutMatch();
+        }
+    } else {
+        renderLeagueUI();
+    }
+}
+
 function renderPlayerListUI() {
   if (teams.length === 0) {
     app.innerHTML = `
@@ -819,63 +966,9 @@ function renderPlayerListUI() {
   }
 
   app.innerHTML = `
-    <style>
-      .roster-grid {
-        display: grid;
-        grid-template-columns: 1fr 1fr;
-        gap: 2rem;
-        padding: 1rem;
-      }
-      @media (max-width: 768px) {
-        .roster-grid {
-          grid-template-columns: 1fr;
-        }
-      }
-      .team-card {
-        background: var(--card-bg);
-        border-radius: 12px;
-        padding: 1.5rem;
-        box-shadow: 0 4px 6px rgba(0,0,0,0.2);
-        border-top: 5px solid var(--primary-color);
-      }
-      .roster-table {
-        width: 100%;
-        border-collapse: collapse;
-        font-size: 0.85rem;
-        margin-top: 1rem;
-      }
-      .roster-table th {
-        text-align: center;
-        padding: 8px;
-        background: rgba(255,255,255,0.05);
-        color: #aaa;
-        font-weight: 600;
-        border-bottom: 2px solid rgba(255,255,255,0.1);
-      }
-      .roster-table th.name-col {
-        text-align: left;
-      }
-      .roster-table td {
-        padding: 8px;
-        text-align: center;
-        border-bottom: 1px solid rgba(255,255,255,0.05);
-      }
-      .roster-table td.name-col {
-        text-align: left;
-        font-weight: bold;
-        color: var(--text-color);
-      }
-      .stat-val {
-        color: #fff;
-      }
-      .rating-val {
-        color: var(--primary-color);
-        font-weight: bold;
-      }
-    </style>
-    <h2>Player Database</h2>
-    <div class="match-simulation" style="margin-bottom: 20px;">
-        <button onclick="renderLeagueUI()">Back to League</button>
+    <div class="dashboard-header">
+      <h2>👥 Player Database</h2>
+      <button class="btn-secondary" onclick="goBack()" style="font-size:0.8rem; padding:8px 14px;">← Back</button>
     </div>
     <div id="rosterContainer" class="roster-grid"></div>
   `;
@@ -997,7 +1090,8 @@ function resetPlayerDatabase() {
 }
 
 function checkSeasonEnd() {
-    if (currentMatchIndex >= fixtures.length && !seasonEnded) {
+    const allPlayed = fixtures.length > 0 && fixtures.every(f => f.played);
+    if (allPlayed && !seasonEnded) {
         seasonEnded = true;
         
         // Season finished - record stats silently (no alert yet, wait for knockouts)
@@ -1124,11 +1218,12 @@ function addTeamWithRandomPlayers() {
     generateRandomPlayersForTeam(index);
 
     // Add fixtures for the new team against all existing teams
-    addFixturesForNewTeam(newTeam);
+    const catchUp = addFixturesForNewTeam(newTeam);
 
     closePopup();
     renderLeagueUI();
-    alert(`✅ ${teamName} has been added with 17 random players!`);
+    const catchUpMsg = catchUp > 0 ? `\n⚡ ${catchUp} catch-up matches were auto-simulated to keep the tournament balanced.` : '';
+    alert(`✅ ${teamName} has been added with 17 random players!${catchUpMsg}`);
 }
 
 function showCustomPlayerBuilder() {
@@ -1326,12 +1421,13 @@ function confirmCustomTeam() {
     teams.push(newTeam);
 
     // Add fixtures for the new team
-    addFixturesForNewTeam(newTeam);
+    const catchUp = addFixturesForNewTeam(newTeam);
 
     customBuildPlayers = [];
     closePopup();
     renderLeagueUI();
-    alert(`✅ ${teamName} has been created with ${newTeam.players.length} custom players!`);
+    const catchUpMsg = catchUp > 0 ? `\n⚡ ${catchUp} catch-up matches were auto-simulated to keep the tournament balanced.` : '';
+    alert(`✅ ${teamName} has been created with ${newTeam.players.length} custom players!${catchUpMsg}`);
 }
 
 function applyPlayStyle(playerObj, style) {
@@ -1362,32 +1458,73 @@ function applyPlayStyle(playerObj, style) {
 }
 
 function addFixturesForNewTeam(newTeam) {
-    // Add home and away fixtures against all existing teams
-    teams.forEach(t => {
-        if (t.id === newTeam.id) return;
-        fixtures.push({
-            home: newTeam,
-            away: t,
-            homeScore: null,
-            awayScore: null,
-            played: false
+    const existingTeams = teams.filter(t => t.id !== newTeam.id);
+
+    // Count LEAGUE fixtures played per team (not knockout or other stats)
+    // This avoids inflated counts from knockout matches
+    const leagueMatchesPerTeam = {};
+    existingTeams.forEach(t => { leagueMatchesPerTeam[t.id] = 0; });
+    fixtures.forEach(f => {
+        if (!f.played) return;
+        if (leagueMatchesPerTeam[f.home.id] !== undefined) leagueMatchesPerTeam[f.home.id]++;
+        if (leagueMatchesPerTeam[f.away.id] !== undefined) leagueMatchesPerTeam[f.away.id]++;
+    });
+
+    // Use the average league fixtures played by existing teams as the catch-up target
+    const counts = Object.values(leagueMatchesPerTeam);
+    const avgLeaguePlayed = counts.length > 0
+        ? Math.round(counts.reduce((a, b) => a + b, 0) / counts.length)
+        : 0;
+
+    // Create all new fixtures (home & away vs every existing team)
+    const newFixtures = [];
+    existingTeams.forEach(t => {
+        newFixtures.push({
+            home: newTeam, away: t,
+            homeScore: null, awayScore: null, played: false
         });
-        fixtures.push({
-            home: t,
-            away: newTeam,
-            homeScore: null,
-            awayScore: null,
-            played: false
+        newFixtures.push({
+            home: t, away: newTeam,
+            homeScore: null, awayScore: null, played: false
         });
     });
-    // Shuffle remaining unplayed fixtures
-    const played = fixtures.filter(f => f.played);
-    const unplayed = fixtures.filter(f => !f.played);
-    shuffleArray(unplayed);
-    fixtures = [...played, ...unplayed];
-    // Reset currentMatchIndex to the first unplayed match
+
+    // Auto-simulate catch-up matches so the new team is on par with others
+    let catchUpCount = 0;
+    if (avgLeaguePlayed > 0) {
+        shuffleArray(newFixtures);
+        catchUpCount = Math.min(avgLeaguePlayed, newFixtures.length);
+
+        for (let i = 0; i < catchUpCount; i++) {
+            const match = newFixtures[i];
+            const result = calculateMatchScore(match.home, match.away);
+            match.homeScore = result.homeScore;
+            match.awayScore = result.awayScore;
+            match.played = true;
+            updateTeamStats(match);
+            distributePlayerStats(match, match.homeScore, match.awayScore);
+
+            matchHistory.push({
+                homeTeam: match.home.name,
+                awayTeam: match.away.name,
+                homeScore: match.homeScore,
+                awayScore: match.awayScore,
+            });
+        }
+        localStorage.setItem("matchHistory", JSON.stringify(matchHistory));
+    }
+
+    // Add all new fixtures to the main list
+    fixtures.push(...newFixtures);
+
+    // Reset seasonEnded since we now have new matches to play
+    seasonEnded = false;
+
+    // Update currentMatchIndex to point to first unplayed
     currentMatchIndex = fixtures.findIndex(f => !f.played);
     if (currentMatchIndex === -1) currentMatchIndex = fixtures.length;
+
+    return catchUpCount;
 }
 
 function viewTrophyRoom() {
@@ -1490,4 +1627,66 @@ function viewTrophyRoom() {
     html += `<button onclick="closePopup()" style="margin-top:20px; width:100%; padding:15px; font-size:1.2rem;">Close Trophy Room</button>`;
     
     showPopup(html);
+}
+
+// ============================================
+// THEME SYSTEM
+// ============================================
+function openThemePicker() {
+    const themes = [
+        // Original themes
+        { id: 'midnight', name: 'Midnight Blue', icon: '🌙', colors: ['#0a1628', '#001a33', '#FFD700'], desc: 'Deep navy with gold accents' },
+        { id: 'obsidian', name: 'Obsidian', icon: '🖤', colors: ['#0d0d0d', '#222', '#00d4ff'], desc: 'Pure dark with cyan glow' },
+        { id: 'emerald', name: 'Emerald Field', icon: '🌿', colors: ['#061a0e', '#0f3c1e', '#50fa7b'], desc: 'Lush green football pitch' },
+        { id: 'crimson', name: 'Crimson Night', icon: '🔥', colors: ['#1a0a0e', '#3c0f19', '#ff5555'], desc: 'Dark red intensity' },
+        { id: 'arctic', name: 'Arctic Light', icon: '❄️', colors: ['#f0f4f8', '#ffffff', '#2563eb'], desc: 'Clean light mode' },
+        { id: 'neon', name: 'Neon Pulse', icon: '💜', colors: ['#0a0015', '#1e003c', '#ff00ff'], desc: 'Vibrant synthwave' },
+        // Hackatime-inspired themes
+        { id: 'gruvbox', name: 'Gruvbox Dark', icon: '🟤', colors: ['#1d2021', '#3c3836', '#d8a657'], desc: 'Retro warm tones' },
+        { id: 'catppuccin', name: 'Catppuccin', icon: '🍵', colors: ['#11111b', '#313244', '#cba6f7'], desc: 'Warm purple-tinted dark' },
+        { id: 'nord', name: 'Nord', icon: '🧊', colors: ['#2e3440', '#434c5e', '#88c0d0'], desc: 'Arctic blue-gray frost' },
+        { id: 'rosepine', name: 'Rosé Pine', icon: '🌹', colors: ['#191724', '#26233a', '#eb6f92'], desc: 'Romantic dark palette' },
+        { id: 'dracula', name: 'Dracula', icon: '🧛', colors: ['#282a36', '#44475a', '#bd93f9'], desc: 'Classic purple vampire' },
+        { id: 'tokyo', name: 'Tokyo Night', icon: '🗼', colors: ['#1a1b26', '#24283b', '#7aa2f7'], desc: 'Neon-lit Japanese night' },
+        { id: 'github', name: 'GitHub Dark', icon: '🐙', colors: ['#0d1117', '#21262d', '#58a6ff'], desc: 'GitHub\'s iconic dark' },
+        { id: 'solarized', name: 'Solarized', icon: '☀️', colors: ['#002b36', '#073642', '#268bd2'], desc: 'Precision color science' },
+        // Special layout themes
+        { id: 'og', name: 'OG Classic', icon: '🏟️', colors: ['#1a1a2e', '#16213e', '#e94560'], desc: 'The original BIG layout' }
+    ];
+
+    const current = document.body.getAttribute('data-theme') || 'midnight';
+
+    let html = `<h2 style="text-align:center;">🎨 Choose Your Theme</h2>
+    <p style="text-align:center; color:var(--text-muted); font-size:0.88rem; margin-bottom:20px;">15 themes inspired by <strong style="color:var(--accent);">Hackatime</strong> & popular code editors</p>
+    <div class="theme-grid">`;
+
+    themes.forEach(t => {
+        const isActive = t.id === current;
+        html += `<div class="theme-card ${isActive ? 'active' : ''}" onclick="setTheme('${t.id}')">
+            <div class="theme-preview" style="background: linear-gradient(135deg, ${t.colors[0]}, ${t.colors[1]}); border: 2px solid ${t.colors[2]};">
+                <span class="theme-swatch" style="background: ${t.colors[2]}; box-shadow: 0 0 12px ${t.colors[2]};"></span>
+            </div>
+            <div class="theme-name">${t.icon} ${t.name}</div>
+            <div style="font-size:0.65rem; color:var(--text-muted); margin-top:2px;">${t.desc}</div>
+            ${isActive ? '<div class="theme-active-badge">✓ Active</div>' : ''}
+        </div>`;
+    });
+
+    html += `</div>
+    <button onclick="closePopup()" style="width:100%; margin-top:20px;">Close</button>`;
+
+    showPopup(html);
+}
+
+function setTheme(name) {
+    document.body.setAttribute('data-theme', name);
+    localStorage.setItem('ls-theme', name);
+    // Re-render theme picker if it's open
+    const overlay = document.querySelector('.popup-overlay');
+    if (overlay) {
+        const content = overlay.querySelector('.popup-content');
+        if (content && content.innerHTML.includes('theme-grid')) {
+            openThemePicker();
+        }
+    }
 }
