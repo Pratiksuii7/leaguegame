@@ -55,11 +55,13 @@ function renderLeagueUI() {
     <h2>League Matches & Table</h2>
     <div class="match-simulation">
       <button onclick="simulateNextMatch()">Simulate Next Match</button>
+      <button onclick="simulateNextMatchVisual()" style="background:#2d6a4f; color:white;">▶ Watch Next Match</button>
       <button onclick="simulateAllMatches()">Simulate All Remaining</button>
       <button onclick="startKnockouts()">Start Knockouts</button>
       <button onclick="showLeagueStats()">View League Stats/Awards</button>
       <button onclick="renderPlayerListUI()">Manage Player Database</button>
       <button onclick="regenerateAllPlayers()">Generate Random Players for All Teams</button>
+      <button onclick="openAddTeamPopup()" style="background:#2d6a4f; color:white;">➕ Add New Team</button>
       <button onclick="restartLeague()">Restart Tournament</button>
       <button onclick="viewMatchHistory()">View Match History</button>
       <button onclick="viewTrophyRoom()">🏆 Trophy Room & Records</button>
@@ -102,6 +104,7 @@ function renderCurrentMatch() {
     <label>Away Score:</label>
     <input id="awayScoreInput" placeholder="Leave empty for random">
     <button onclick="saveMatchResult()">Save Result & Next</button>
+    <button onclick="simulateNextMatchVisual()" style="background:#2d6a4f; color:white; font-size:0.9rem;">▶ Watch Match</button>
   `;
 }
 
@@ -206,6 +209,11 @@ function restartLeague() {
     teams = [];
     fixtures = [];
     currentMatchIndex = 0;
+    knockoutMatches = [];
+    knockoutResults = [];
+    knockoutHistory = [];
+    knockoutStage = 0;
+    seasonEnded = false;
     renderSetup();
   }
 }
@@ -522,6 +530,7 @@ function renderNextKnockoutMatch() {
       <input id="awayScoreInput" type="number" min="0">
       <button onclick="playKnockoutMatch()">Save Result & Next</button>
       <button onclick="simulateCurrentKnockoutMatch()">Simulate This Match</button>
+      <button onclick="simulateKnockoutMatchVisual()" style="background:#2d6a4f; color:white;">▶ Watch This Match</button>
       <button onclick="simulateAllKnockoutMatches()">Simulate All Matches</button>
       <button onclick="renderPlayerListUI()">Player Database</button>
       <button onclick="showLeagueStats()">View League Stats</button>
@@ -531,14 +540,29 @@ function renderNextKnockoutMatch() {
     `;
   } else {
     if (knockoutResults.length === 1) {
+      const champion = knockoutResults[0].winner.name;
+      
+      // Update the season record with the knockout champion
+      if (seasonHistory.length > 0) {
+          seasonHistory[seasonHistory.length - 1].knockoutChampion = champion;
+          localStorage.setItem("seasonHistory", JSON.stringify(seasonHistory));
+      }
+      
       app.innerHTML = `
-        <h2>Champion: ${knockoutResults[0].winner.name}</h2>
+        <h2>🏆 Champion: ${champion}!</h2>
+        <p style="text-align:center; font-size:1.2em; color:gold;">Congratulations to ${champion} for winning the tournament!</p>
         <button onclick="restartLeague()">Restart Tournament</button>
         <button onclick="renderPlayerListUI()">Player Database</button>
         <button onclick="showLeagueStats()">View League Stats</button>
         <button onclick="viewAwards()">View Team Stats</button>
+        <button onclick="viewTrophyRoom()">🏆 Trophy Room & Records</button>
         <div id="knockoutBracket"></div>
       `;
+      
+      // Show the champion alert only after knockouts are fully done
+      setTimeout(() => {
+          alert(`🏆 Tournament Over! Champion: ${champion}`);
+      }, 300);
     } else {
       // Advance to next round
       const nextRoundTeams = knockoutResults.map((r) => r.winner);
@@ -563,18 +587,36 @@ function renderNextKnockoutMatch() {
 }
 
 function playKnockoutMatch() {
+  if (knockoutStage >= knockoutMatches.length) return;
   const m = knockoutMatches[knockoutStage];
   const homeScore = parseInt(document.getElementById("homeScoreInput").value) || randomInt(0, 5);
   const awayScore = parseInt(document.getElementById("awayScoreInput").value) || randomInt(0, 5);
-  saveKnockoutResult(m, homeScore, awayScore);
-  renderNextKnockoutMatch();
+  if (homeScore === awayScore) {
+    // Draw — launch penalty shootout
+    openPenaltyShootout(m.home, m.away, homeScore, awayScore, (penResult) => {
+      saveKnockoutResult(m, homeScore, awayScore, penResult);
+      renderNextKnockoutMatch();
+    });
+  } else {
+    saveKnockoutResult(m, homeScore, awayScore, null);
+    renderNextKnockoutMatch();
+  }
 }
 
 function simulateCurrentKnockoutMatch() {
+  if (knockoutStage >= knockoutMatches.length) return;
   const m = knockoutMatches[knockoutStage];
   const result = calculateMatchScore(m.home, m.away);
-  saveKnockoutResult(m, result.homeScore, result.awayScore);
-  renderNextKnockoutMatch();
+  if (result.homeScore === result.awayScore) {
+    // Draw — launch penalty shootout
+    openPenaltyShootout(m.home, m.away, result.homeScore, result.awayScore, (penResult) => {
+      saveKnockoutResult(m, result.homeScore, result.awayScore, penResult);
+      renderNextKnockoutMatch();
+    });
+  } else {
+    saveKnockoutResult(m, result.homeScore, result.awayScore, null);
+    renderNextKnockoutMatch();
+  }
 }
 
 function simulateAllKnockoutMatches() {
@@ -582,7 +624,11 @@ function simulateAllKnockoutMatches() {
     if (knockoutStage < knockoutMatches.length) {
       const m = knockoutMatches[knockoutStage];
       const result = calculateMatchScore(m.home, m.away);
-      saveKnockoutResult(m, result.homeScore, result.awayScore);
+      let penResult = null;
+      if (result.homeScore === result.awayScore) {
+        penResult = autoResolvePenaltyShootout(m.home, m.away);
+      }
+      saveKnockoutResult(m, result.homeScore, result.awayScore, penResult);
     } else if (knockoutResults.length > 1) {
       // Advance round logic inside loop
       const nextRoundTeams = knockoutResults.map((r) => r.winner);
@@ -951,8 +997,10 @@ function resetPlayerDatabase() {
 }
 
 function checkSeasonEnd() {
-    if (currentMatchIndex >= fixtures.length) {
-        // Season finished
+    if (currentMatchIndex >= fixtures.length && !seasonEnded) {
+        seasonEnded = true;
+        
+        // Season finished - record stats silently (no alert yet, wait for knockouts)
         const sortedTeams = [...teams].sort(
             (a, b) =>
             b.stats.points - a.stats.points ||
@@ -977,32 +1025,369 @@ function checkSeasonEnd() {
             topScorer: topScorer.name,
             topScorerGoals: topScorer.goals
         };
-        
-        // Check if this season is already recorded (simple check by length or ID if we had one)
-        // Since we only call this when match index increments, it might be called multiple times if we are not careful.
-        // But currentMatchIndex >= fixtures.length is the condition.
-        // To avoid duplicates, we can check if the last season in history matches this one?
-        // Or just rely on the user restarting.
-        // Better: Only add if we haven't added it yet.
-        // But we don't have a "seasonId".
-        // Let's just add it. The user is expected to restart after season ends.
-        
-        // Wait, if I click "Simulate All", it runs this loop.
-        // If I click "Simulate Next" on the last match, it runs this.
-        // We should probably have a flag "seasonEnded".
-        
-        if (seasonHistory.length > 0) {
-             // Prevent duplicate addition if we just finished
-             // This is a bit hacky but works for now.
-        }
 
         seasonHistory.push(seasonRecord);
         localStorage.setItem("seasonHistory", JSON.stringify(seasonHistory));
         
         updateGlobalRecords(seasonHistory.length - 1);
-        
-        alert(`Season Ended! Champion: ${seasonRecord.champion}`);
     }
+}
+
+// ---- ADD TEAM MID-TOURNAMENT ----
+function openAddTeamPopup() {
+    let html = `
+    <style>
+        .add-team-container { max-width: 700px; margin: 0 auto; }
+        .add-team-section { background: rgba(0,0,0,0.3); border-radius: 12px; padding: 20px; margin-bottom: 15px; border: 1px solid rgba(255,215,0,0.15); }
+        .add-team-section h3 { color: #FFD700; margin-top: 0; font-size: 1.1rem; }
+        .option-cards { display: grid; grid-template-columns: 1fr 1fr; gap: 15px; margin-top: 15px; }
+        .option-card { background: rgba(0,43,92,0.6); border: 2px solid #4a678f; border-radius: 12px; padding: 20px; text-align: center; cursor: pointer; transition: all 0.3s ease; }
+        .option-card:hover { border-color: #FFD700; transform: translateY(-3px); box-shadow: 0 6px 20px rgba(255,215,0,0.2); }
+        .option-card .option-icon { font-size: 2.5rem; margin-bottom: 10px; }
+        .option-card .option-title { font-family: 'Orbitron', sans-serif; font-size: 1rem; color: #FFD700; margin-bottom: 8px; }
+        .option-card .option-desc { font-size: 0.8rem; color: #aaa; }
+        .custom-player-form { background: rgba(0,0,0,0.2); border-radius: 8px; padding: 15px; margin-bottom: 10px; border: 1px solid rgba(255,255,255,0.1); }
+        .form-row { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; margin-bottom: 10px; }
+        .form-row.three-col { grid-template-columns: 1fr 1fr 1fr; }
+        .form-group { display: flex; flex-direction: column; gap: 4px; }
+        .form-group label { font-size: 0.75rem; color: #aaa; text-transform: uppercase; letter-spacing: 0.5px; }
+        .form-group input, .form-group select { padding: 8px 12px; border-radius: 6px; border: 1px solid #4a678f; background: #00234a; color: #f0f4f8; font-size: 0.9rem; }
+        .form-group input:focus, .form-group select:focus { border-color: #FFD700; outline: none; box-shadow: 0 0 6px rgba(255,215,0,0.3); }
+        .player-list-preview { max-height: 300px; overflow-y: auto; margin-top: 10px; }
+        .player-preview-item { display: flex; align-items: center; justify-content: space-between; padding: 8px 12px; background: rgba(0,0,0,0.2); border-radius: 6px; margin-bottom: 4px; font-size: 0.85rem; }
+        .player-preview-item .pos-badge { padding: 2px 8px; border-radius: 4px; font-size: 0.7rem; font-weight: 700; color: #000; }
+        .pos-gk { background: #fbc531; } .pos-def { background: #4cd137; } .pos-mid { background: #00d2d3; } .pos-fwd { background: #e84118; }
+        .rating-display { display: flex; align-items: center; gap: 8px; }
+        .rating-display .rating-value { font-family: 'Orbitron', sans-serif; font-size: 1.1rem; color: #FFD700; font-weight: 700; min-width: 30px; text-align: center; }
+        .style-tag { font-size: 0.65rem; padding: 2px 6px; border-radius: 3px; background: rgba(255,255,255,0.1); color: #ccc; }
+        .remove-btn { background: #d62828; color: white; border: none; padding: 4px 10px; border-radius: 4px; cursor: pointer; font-size: 0.75rem; }
+        .remove-btn:hover { background: #e63946; }
+    </style>
+    <div class="add-team-container">
+        <h2 style="text-align:center; color:#FFD700;">➕ Add New Team</h2>
+        
+        <div class="add-team-section">
+            <h3>Team Name</h3>
+            <input type="text" id="newTeamNameInput" placeholder="Enter team name..." style="width:100%; box-sizing:border-box;">
+        </div>
+
+        <div class="add-team-section">
+            <h3>How do you want to build the squad?</h3>
+            <div class="option-cards">
+                <div class="option-card" onclick="addTeamWithRandomPlayers()">
+                    <div class="option-icon">🎲</div>
+                    <div class="option-title">Random Squad</div>
+                    <div class="option-desc">Auto-generate 17 players from the database with balanced positions</div>
+                </div>
+                <div class="option-card" onclick="showCustomPlayerBuilder()">
+                    <div class="option-icon">🛠️</div>
+                    <div class="option-title">Build Custom Squad</div>
+                    <div class="option-desc">Create each player yourself — set name, position, rating & play style</div>
+                </div>
+            </div>
+        </div>
+
+        <div id="customBuilderArea" style="display:none;"></div>
+
+        <button onclick="closePopup()" style="width:100%; margin-top:10px;">Cancel</button>
+    </div>
+    `;
+    showPopup(html);
+}
+
+// Temp storage for custom players being built
+let customBuildPlayers = [];
+
+function addTeamWithRandomPlayers() {
+    const nameInput = document.getElementById('newTeamNameInput');
+    const teamName = nameInput ? nameInput.value.trim() : '';
+    if (!teamName) return alert('Please enter a team name!');
+    if (teams.some(t => t.name.toLowerCase() === teamName.toLowerCase())) return alert('A team with this name already exists!');
+
+    // Create the team
+    const newId = teams.length > 0 ? Math.max(...teams.map(t => t.id)) + 1 : 0;
+    const usedColors = new Set(teams.map(t => t.color));
+    let color;
+    do { color = `hsl(${randomInt(0, 360)}, 60%, 45%)`; } while (usedColors.has(color));
+
+    const newTeam = {
+        id: newId,
+        name: teamName,
+        color: color,
+        players: [],
+        stats: { played: 0, wins: 0, draws: 0, losses: 0, goalsFor: 0, goalsAgainst: 0, points: 0 }
+    };
+    teams.push(newTeam);
+
+    // Generate random players
+    const index = teams.findIndex(t => t.id === newId);
+    generateRandomPlayersForTeam(index);
+
+    // Add fixtures for the new team against all existing teams
+    addFixturesForNewTeam(newTeam);
+
+    closePopup();
+    renderLeagueUI();
+    alert(`✅ ${teamName} has been added with 17 random players!`);
+}
+
+function showCustomPlayerBuilder() {
+    const nameInput = document.getElementById('newTeamNameInput');
+    const teamName = nameInput ? nameInput.value.trim() : '';
+    if (!teamName) return alert('Please enter a team name first!');
+
+    customBuildPlayers = [];
+    const area = document.getElementById('customBuilderArea');
+    area.style.display = 'block';
+    renderCustomBuilder();
+}
+
+function renderCustomBuilder() {
+    const area = document.getElementById('customBuilderArea');
+    if (!area) return;
+
+    const posCount = { GK: 0, DEF: 0, MID: 0, FWD: 0 };
+    customBuildPlayers.forEach(p => { if (posCount[p.position] !== undefined) posCount[p.position]++; });
+
+    let html = `
+    <div class="add-team-section">
+        <h3>🛠️ Custom Player Builder</h3>
+        <p style="font-size:0.8rem; color:#aaa;">Add at least 11 players (recommended 17). Current: <strong style="color:#FFD700;">${customBuildPlayers.length}</strong> players
+        — GK: ${posCount.GK} | DEF: ${posCount.DEF} | MID: ${posCount.MID} | FWD: ${posCount.FWD}</p>
+        
+        <div class="custom-player-form">
+            <div class="form-row">
+                <div class="form-group">
+                    <label>Player Name</label>
+                    <input type="text" id="cpName" placeholder="e.g. Ronaldo">
+                </div>
+                <div class="form-group">
+                    <label>Position</label>
+                    <select id="cpPosition">
+                        <option value="GK">🧤 GK — Goalkeeper</option>
+                        <option value="DEF">🛡️ DEF — Defender</option>
+                        <option value="MID" selected>⚙️ MID — Midfielder</option>
+                        <option value="FWD">⚔️ FWD — Forward</option>
+                    </select>
+                </div>
+            </div>
+            <div class="form-row three-col">
+                <div class="form-group">
+                    <label>Overall Rating</label>
+                    <div class="rating-display">
+                        <input type="range" id="cpRating" min="40" max="99" value="75" oninput="document.getElementById('cpRatingVal').textContent=this.value" style="flex:1;">
+                        <span id="cpRatingVal" class="rating-value">75</span>
+                    </div>
+                </div>
+                <div class="form-group">
+                    <label>Play Style</label>
+                    <select id="cpStyle">
+                        <option value="balanced">⚖️ Balanced</option>
+                        <option value="offensive">⚔️ Offensive</option>
+                        <option value="defensive">🛡️ Defensive</option>
+                        <option value="playmaker">🎯 Playmaker</option>
+                        <option value="speedster">💨 Speedster</option>
+                        <option value="physical">💪 Physical</option>
+                        <option value="technical">🎩 Technical</option>
+                    </select>
+                </div>
+                <div class="form-group" style="justify-content:flex-end;">
+                    <button onclick="addCustomPlayer()" style="padding:8px 16px; font-size:0.85rem; margin:0;">+ Add Player</button>
+                </div>
+            </div>
+        </div>
+
+        <div class="player-list-preview" id="customPlayerList">
+            ${customBuildPlayers.length === 0 ? '<p style="text-align:center; color:#555; font-size:0.85rem;">No players added yet</p>' : ''}
+            ${customBuildPlayers.map((p, i) => {
+                const posClass = 'pos-' + p.position.toLowerCase();
+                const styleLabel = getStyleEmoji(p.style);
+                return `<div class="player-preview-item">
+                    <span><strong>${p.name}</strong></span>
+                    <span class="pos-badge ${posClass}">${p.position}</span>
+                    <span style="color:#FFD700; font-weight:700;">${p.rating}</span>
+                    <span class="style-tag">${styleLabel}</span>
+                    <button class="remove-btn" onclick="removeCustomPlayer(${i})">✕</button>
+                </div>`;
+            }).join('')}
+        </div>
+
+        <div style="margin-top:15px; display:flex; gap:10px;">
+            <button onclick="confirmCustomTeam()" style="flex:1; background:#2d6a4f; color:white;" ${customBuildPlayers.length < 11 ? 'disabled' : ''}>✅ Create Team (${customBuildPlayers.length} players)</button>
+            <button onclick="addBulkRandomToCustom()" style="flex:1; background:#1a4371; color:#ccc; border:1px solid #4a678f;">🎲 Fill Remaining with Random</button>
+        </div>
+    </div>
+    `;
+    area.innerHTML = html;
+}
+
+function getStyleEmoji(style) {
+    const map = {
+        balanced: '⚖️ Balanced',
+        offensive: '⚔️ Offensive',
+        defensive: '🛡️ Defensive',
+        playmaker: '🎯 Playmaker',
+        speedster: '💨 Speedster',
+        physical: '💪 Physical',
+        technical: '🎩 Technical'
+    };
+    return map[style] || style;
+}
+
+function addCustomPlayer() {
+    const name = document.getElementById('cpName').value.trim();
+    const position = document.getElementById('cpPosition').value;
+    const rating = parseInt(document.getElementById('cpRating').value);
+    const style = document.getElementById('cpStyle').value;
+
+    if (!name) return alert('Please enter a player name!');
+    if (customBuildPlayers.some(p => p.name.toLowerCase() === name.toLowerCase())) return alert('Player with this name already added!');
+    if (isNaN(rating) || rating < 40 || rating > 99) return alert('Rating must be between 40 and 99!');
+
+    customBuildPlayers.push({ name, position, rating, style });
+
+    // Clear name input for next player
+    document.getElementById('cpName').value = '';
+    renderCustomBuilder();
+    // Re-focus name input
+    setTimeout(() => { const inp = document.getElementById('cpName'); if (inp) inp.focus(); }, 50);
+}
+
+function removeCustomPlayer(index) {
+    customBuildPlayers.splice(index, 1);
+    renderCustomBuilder();
+}
+
+function addBulkRandomToCustom() {
+    const needed = Math.max(0, 17 - customBuildPlayers.length);
+    if (needed === 0) return alert('You already have 17 players!');
+
+    // Figure out what positions are needed
+    const posCount = { GK: 0, DEF: 0, MID: 0, FWD: 0 };
+    customBuildPlayers.forEach(p => { if (posCount[p.position] !== undefined) posCount[p.position]++; });
+
+    const posNeeds = [];
+    // Need at least 2 GK, 4 DEF, 3 MID, 3 FWD
+    while (posCount.GK < 2) { posNeeds.push('GK'); posCount.GK++; }
+    while (posCount.DEF < 4) { posNeeds.push('DEF'); posCount.DEF++; }
+    while (posCount.MID < 3) { posNeeds.push('MID'); posCount.MID++; }
+    while (posCount.FWD < 3) { posNeeds.push('FWD'); posCount.FWD++; }
+
+    // Fill rest randomly
+    while (posNeeds.length < needed) {
+        posNeeds.push(['DEF', 'MID', 'FWD'][randomInt(0, 2)]);
+    }
+
+    // Only take what we need
+    const toAdd = posNeeds.slice(0, needed);
+    const usedNames = new Set(customBuildPlayers.map(p => p.name.toLowerCase()));
+
+    toAdd.forEach(pos => {
+        const pool = playerDatabase.filter(p => p.position === pos && !usedNames.has(p.name.toLowerCase()));
+        if (pool.length > 0) {
+            const pick = pool[randomInt(0, pool.length - 1)];
+            customBuildPlayers.push({ name: pick.name, position: pick.position, rating: pick.rating, style: 'balanced' });
+            usedNames.add(pick.name.toLowerCase());
+        } else {
+            const genName = `${pos} Player ${randomInt(100, 999)}`;
+            customBuildPlayers.push({ name: genName, position: pos, rating: randomInt(60, 82), style: 'balanced' });
+            usedNames.add(genName.toLowerCase());
+        }
+    });
+
+    renderCustomBuilder();
+}
+
+function confirmCustomTeam() {
+    if (customBuildPlayers.length < 11) return alert('You need at least 11 players!');
+    const nameInput = document.getElementById('newTeamNameInput');
+    const teamName = nameInput ? nameInput.value.trim() : '';
+    if (!teamName) return alert('Team name is missing! Please re-open the dialog.');
+    if (teams.some(t => t.name.toLowerCase() === teamName.toLowerCase())) return alert('A team with this name already exists!');
+
+    const newId = teams.length > 0 ? Math.max(...teams.map(t => t.id)) + 1 : 0;
+    const usedColors = new Set(teams.map(t => t.color));
+    let color;
+    do { color = `hsl(${randomInt(0, 360)}, 60%, 45%)`; } while (usedColors.has(color));
+
+    const newTeam = {
+        id: newId,
+        name: teamName,
+        color: color,
+        players: customBuildPlayers.map(p => {
+            const playerObj = createPlayerObject(p.name, p.rating, p.position);
+            playerObj.playStyle = p.style;
+            // Adjust sub-ratings based on play style
+            applyPlayStyle(playerObj, p.style);
+            return playerObj;
+        }),
+        stats: { played: 0, wins: 0, draws: 0, losses: 0, goalsFor: 0, goalsAgainst: 0, points: 0 }
+    };
+    teams.push(newTeam);
+
+    // Add fixtures for the new team
+    addFixturesForNewTeam(newTeam);
+
+    customBuildPlayers = [];
+    closePopup();
+    renderLeagueUI();
+    alert(`✅ ${teamName} has been created with ${newTeam.players.length} custom players!`);
+}
+
+function applyPlayStyle(playerObj, style) {
+    switch (style) {
+        case 'offensive':
+            playerObj.freekickRating = Math.min(99, playerObj.freekickRating + 8);
+            break;
+        case 'defensive':
+            playerObj.passingRating = Math.min(99, playerObj.passingRating + 5);
+            break;
+        case 'playmaker':
+            playerObj.passingRating = Math.min(99, playerObj.passingRating + 10);
+            break;
+        case 'speedster':
+            // Speed affects gameplay position drift
+            break;
+        case 'physical':
+            // Physical players are tougher
+            break;
+        case 'technical':
+            playerObj.freekickRating = Math.min(99, playerObj.freekickRating + 12);
+            playerObj.passingRating = Math.min(99, playerObj.passingRating + 5);
+            break;
+        case 'balanced':
+        default:
+            break;
+    }
+}
+
+function addFixturesForNewTeam(newTeam) {
+    // Add home and away fixtures against all existing teams
+    teams.forEach(t => {
+        if (t.id === newTeam.id) return;
+        fixtures.push({
+            home: newTeam,
+            away: t,
+            homeScore: null,
+            awayScore: null,
+            played: false
+        });
+        fixtures.push({
+            home: t,
+            away: newTeam,
+            homeScore: null,
+            awayScore: null,
+            played: false
+        });
+    });
+    // Shuffle remaining unplayed fixtures
+    const played = fixtures.filter(f => f.played);
+    const unplayed = fixtures.filter(f => !f.played);
+    shuffleArray(unplayed);
+    fixtures = [...played, ...unplayed];
+    // Reset currentMatchIndex to the first unplayed match
+    currentMatchIndex = fixtures.findIndex(f => !f.played);
+    if (currentMatchIndex === -1) currentMatchIndex = fixtures.length;
 }
 
 function viewTrophyRoom() {

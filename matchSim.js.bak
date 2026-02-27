@@ -1,0 +1,1055 @@
+/* =============================================
+   MATCH SIMULATION ENGINE  
+   Full 2D pitch with coin-shaped players, ball,
+   live timer, speed controls, modes, lineups
+   ============================================= */
+
+// ---- CONSTANTS ----
+const SIM_PITCH_W = 800;
+const SIM_PITCH_H = 500;
+const SIM_PLAYER_R = 14;
+const SIM_BALL_R = 6;
+const SIM_MATCH_DURATION = 90; // minutes
+const SIM_FPS = 60;
+
+// Formation templates  (x: 0-1 from left goal, y: 0-1 from top)
+const FORMATIONS = {
+    home: {
+        GK:  [{ x: 0.06, y: 0.5 }],
+        DEF: [{ x: 0.18, y: 0.18 }, { x: 0.18, y: 0.40 }, { x: 0.18, y: 0.60 }, { x: 0.18, y: 0.82 }],
+        MID: [{ x: 0.35, y: 0.25 }, { x: 0.35, y: 0.50 }, { x: 0.35, y: 0.75 }],
+        FWD: [{ x: 0.45, y: 0.25 }, { x: 0.45, y: 0.50 }, { x: 0.45, y: 0.75 }]
+    },
+    away: {
+        GK:  [{ x: 0.94, y: 0.5 }],
+        DEF: [{ x: 0.82, y: 0.18 }, { x: 0.82, y: 0.40 }, { x: 0.82, y: 0.60 }, { x: 0.82, y: 0.82 }],
+        MID: [{ x: 0.65, y: 0.25 }, { x: 0.65, y: 0.50 }, { x: 0.65, y: 0.75 }],
+        FWD: [{ x: 0.55, y: 0.25 }, { x: 0.55, y: 0.50 }, { x: 0.55, y: 0.75 }]
+    }
+};
+
+// Mode settings: affects goal frequency, event probability
+const SIM_MODES = {
+    defensive: {
+        label: '🛡️ Defensive',
+        goalChance: 0.004,
+        eventChance: 0.002,
+        cardChance: 0.001,
+        ballSpeed: 2.5,
+        playerSpeed: 1.0,
+        possession: 0.5
+    },
+    mid: {
+        label: '⚔️ Balanced',
+        goalChance: 0.008,
+        eventChance: 0.004,
+        cardChance: 0.0015,
+        ballSpeed: 3.5,
+        playerSpeed: 1.4,
+        possession: 0.5
+    },
+    chaos: {
+        label: '🔥 Chaos',
+        goalChance: 0.016,
+        eventChance: 0.007,
+        cardChance: 0.002,
+        ballSpeed: 4.5,
+        playerSpeed: 1.8,
+        possession: 0.5
+    }
+};
+
+// ---- SIM STATE ----
+let simState = null;
+
+function createSimState(homeTeam, awayTeam, mode, onFinish) {
+    // Pick starting 11 from each team (by position priority)
+    const pickStarting11 = (team) => {
+        const byPos = { GK: [], DEF: [], MID: [], FWD: [] };
+        team.players.forEach(p => {
+            if (byPos[p.position]) byPos[p.position].push(p);
+        });
+        // Sort each position by rating descending
+        Object.values(byPos).forEach(arr => arr.sort((a, b) => b.rating - a.rating));
+
+        const starting = [];
+        // 1 GK
+        starting.push(...byPos.GK.slice(0, 1));
+        // 4 DEF
+        starting.push(...byPos.DEF.slice(0, 4));
+        // 3 MID
+        starting.push(...byPos.MID.slice(0, 3));
+        // 3 FWD
+        starting.push(...byPos.FWD.slice(0, 3));
+
+        // If we don't have enough in a position, fill from others
+        if (starting.length < 11) {
+            const remaining = team.players.filter(p => !starting.includes(p));
+            remaining.sort((a, b) => b.rating - a.rating);
+            while (starting.length < 11 && remaining.length > 0) {
+                starting.push(remaining.shift());
+            }
+        }
+        return starting.slice(0, 11);
+    };
+
+    const homeStarting = pickStarting11(homeTeam);
+    const awayStarting = pickStarting11(awayTeam);
+
+    const modeConfig = SIM_MODES[mode] || SIM_MODES.mid;
+
+    // Calculate team ratings
+    const getTeamRating = (players) => {
+        if (!players || players.length === 0) return 70;
+        return players.reduce((s, p) => s + (p.rating || 70), 0) / players.length;
+    };
+
+    const homeRating = getTeamRating(homeStarting);
+    const awayRating = getTeamRating(awayStarting);
+    const ratingDiff = homeRating - awayRating;
+
+    // Build player entities with positions
+    const buildEntities = (players, side) => {
+        const formation = FORMATIONS[side];
+        const slots = { GK: 0, DEF: 0, MID: 0, FWD: 0 };
+        
+        return players.map(p => {
+            const pos = p.position || 'MID';
+            const slotIdx = slots[pos] || 0;
+            slots[pos] = slotIdx + 1;
+
+            const formationSlots = formation[pos] || formation.MID;
+            const slot = formationSlots[slotIdx % formationSlots.length];
+
+            const baseX = slot.x * SIM_PITCH_W;
+            const baseY = slot.y * SIM_PITCH_H;
+
+            return {
+                player: p,
+                side: side,
+                baseX: baseX,
+                baseY: baseY,
+                x: baseX,
+                y: baseY,
+                vx: 0,
+                vy: 0,
+                targetX: baseX,
+                targetY: baseY,
+                hasBall: false,
+                color: getPlayerColor(p),
+                glowColor: getPlayerGlow(p),
+                label: getPlayerInitials(p.name),
+                radius: SIM_PLAYER_R
+            };
+        });
+    };
+
+    const homeEntities = buildEntities(homeStarting, 'home');
+    const awayEntities = buildEntities(awayStarting, 'away');
+
+    return {
+        homeTeam,
+        awayTeam,
+        homeStarting,
+        awayStarting,
+        homeEntities,
+        awayEntities,
+        homeRating,
+        awayRating,
+        ratingDiff,
+        mode,
+        modeConfig,
+        ball: {
+            x: SIM_PITCH_W / 2,
+            y: SIM_PITCH_H / 2,
+            vx: 0,
+            vy: 0,
+            carrier: null, // entity reference
+            targetX: SIM_PITCH_W / 2,
+            targetY: SIM_PITCH_H / 2
+        },
+        homeScore: 0,
+        awayScore: 0,
+        matchMinute: 0,
+        totalTicks: 0,
+        ticksPerMinute: 40, // at 1x speed
+        speed: 1,
+        paused: false,
+        finished: false,
+        events: [],
+        goalScorers: { home: [], away: [] },
+        assisters: { home: [], away: [] },
+        cards: { home: [], away: [] },
+        possession: { home: 0, away: 0 },
+        onFinish: onFinish,
+        animFrameId: null,
+        lastTimestamp: 0,
+        tickAccumulator: 0,
+        halfTimeDone: false
+    };
+}
+
+// ---- COLOR HELPERS ----
+function getPlayerColor(p) {
+    if (p.type === 'Icon' && p.rating >= 95) return '#E0FFFF';
+    if (p.type === 'Icon') return '#F6E3BA';
+    if (p.rating >= 99) return '#ff4d4d';
+    if (p.rating >= 97) return '#00ffea';
+    if (p.rating >= 95) return '#ff00ea';
+    if (p.rating >= 90) return '#FFD700';
+    if (p.rating >= 85) return '#87CEEB';
+    return '#ffffff';
+}
+
+function getPlayerGlow(p) {
+    if (p.type === 'Icon' && p.rating >= 95) return 'rgba(224,255,255,0.6)';
+    if (p.type === 'Icon') return 'rgba(246,227,186,0.4)';
+    if (p.rating >= 99) return 'rgba(255,0,0,0.5)';
+    if (p.rating >= 97) return 'rgba(0,255,234,0.4)';
+    if (p.rating >= 95) return 'rgba(255,0,234,0.4)';
+    if (p.rating >= 90) return 'rgba(255,215,0,0.3)';
+    return null;
+}
+
+function getPlayerInitials(name) {
+    const parts = name.split(' ');
+    if (parts.length >= 2) return (parts[0][0] + parts[parts.length - 1][0]).toUpperCase();
+    return name.substring(0, 2).toUpperCase();
+}
+
+function getPlayerVipClass(p) {
+    if (p.type === 'Icon' && p.rating >= 95) return 'icon-vip';
+    if (p.type === 'Icon') return 'icon';
+    if (p.rating >= 99) return 'vip-99';
+    if (p.rating >= 97) return 'vip-97';
+    if (p.rating >= 95) return 'vip-95';
+    return '';
+}
+
+// ---- LINEUP HTML ----
+function buildLineupHTML(players, teamName, teamColor, side) {
+    const sorted = [...players].sort((a, b) => {
+        const order = { GK: 0, DEF: 1, MID: 2, FWD: 3 };
+        return (order[a.position] || 2) - (order[b.position] || 2);
+    });
+
+    let html = `<div class="sim-lineup-team">
+        <div class="sim-lineup-title" style="color:${teamColor}">${teamName}</div>`;
+    
+    sorted.forEach(p => {
+        const vipClass = getPlayerVipClass(p);
+        const posClass = p.position ? p.position.toLowerCase() : 'mid';
+        html += `<div class="sim-lineup-player ${vipClass}">
+            <span class="sim-lineup-pos ${posClass}">${p.position}</span>
+            <span class="sim-lineup-name">${p.name}</span>
+            <span class="sim-lineup-rating">${p.rating}</span>
+        </div>`;
+    });
+
+    html += `</div>`;
+    return html;
+}
+
+// ---- MAIN POPUP ----
+function openMatchSimulation(homeTeam, awayTeam, options = {}) {
+    const {
+        mode = 'mid',
+        isKnockout = false,
+        onResult = null
+    } = options;
+
+    // Close any existing popup
+    closeMatchSimulation();
+
+    const overlay = document.createElement('div');
+    overlay.className = 'sim-overlay';
+    overlay.id = 'simOverlay';
+
+    const onFinish = (finalState) => {
+        if (onResult) {
+            onResult({
+                homeScore: finalState.homeScore,
+                awayScore: finalState.awayScore,
+                goalScorers: finalState.goalScorers,
+                assisters: finalState.assisters,
+                cards: finalState.cards,
+                events: finalState.events
+            });
+        }
+    };
+
+    simState = createSimState(homeTeam, awayTeam, mode, onFinish);
+
+    overlay.innerHTML = `
+        <div class="sim-container" id="simContainer">
+            <!-- Scoreboard -->
+            <div class="sim-header">
+                <div class="sim-team-name home" style="color:${homeTeam.color}">${homeTeam.name}</div>
+                <div class="sim-score-box">
+                    <span class="sim-score" id="simHomeScore">0</span>
+                    <span class="sim-score-divider">-</span>
+                    <span class="sim-score" id="simAwayScore">0</span>
+                </div>
+                <div class="sim-team-name away" style="color:${awayTeam.color}">${awayTeam.name}</div>
+                <div class="sim-timer" id="simTimer">0'</div>
+            </div>
+
+            <!-- Controls -->
+            <div class="sim-controls">
+                <button class="sim-speed-btn ${simState.speed === 1 ? 'active' : ''}" onclick="setSimSpeed(1)">1x</button>
+                <button class="sim-speed-btn ${simState.speed === 2 ? 'active' : ''}" onclick="setSimSpeed(2)">2x</button>
+                <button class="sim-speed-btn" onclick="setSimSpeed(4)">4x</button>
+                <button class="sim-speed-btn" onclick="setSimSpeed(8)">8x</button>
+                <button class="sim-speed-btn" onclick="setSimSpeed(16)">16x</button>
+                <span style="color:#555; margin:0 4px;">|</span>
+                <button class="sim-mode-btn ${simState.mode === 'defensive' ? 'active' : ''}" onclick="setSimMode('defensive')">🛡️ DEF</button>
+                <button class="sim-mode-btn ${simState.mode === 'mid' ? 'active' : ''}" onclick="setSimMode('mid')">⚔️ BAL</button>
+                <button class="sim-mode-btn ${simState.mode === 'chaos' ? 'active' : ''}" onclick="setSimMode('chaos')">🔥 CHAOS</button>
+                <span style="color:#555; margin:0 4px;">|</span>
+                <button class="sim-pause-btn" id="simPauseBtn" onclick="toggleSimPause()">⏸ Pause</button>
+                <button class="sim-finish-btn" onclick="instantFinishSim()">⚡ Finish</button>
+            </div>
+
+            <!-- Pitch -->
+            <div class="sim-pitch-wrapper">
+                <canvas id="simCanvas" width="${SIM_PITCH_W}" height="${SIM_PITCH_H}"></canvas>
+            </div>
+
+            <!-- Events -->
+            <div class="sim-events" id="simEvents"></div>
+
+            <!-- Lineups -->
+            <div class="sim-lineups">
+                ${buildLineupHTML(simState.homeStarting, homeTeam.name, homeTeam.color, 'home')}
+                ${buildLineupHTML(simState.awayStarting, awayTeam.name, awayTeam.color, 'away')}
+            </div>
+        </div>
+    `;
+
+    document.body.appendChild(overlay);
+
+    // Start the simulation loop
+    requestAnimationFrame(simLoop);
+}
+
+function closeMatchSimulation() {
+    if (simState && simState.animFrameId) {
+        cancelAnimationFrame(simState.animFrameId);
+    }
+    const overlay = document.getElementById('simOverlay');
+    if (overlay) overlay.remove();
+    simState = null;
+}
+
+// ---- CONTROLS ----
+function setSimSpeed(speed) {
+    if (!simState) return;
+    simState.speed = speed;
+    document.querySelectorAll('.sim-speed-btn').forEach(btn => {
+        btn.classList.toggle('active', btn.textContent === speed + 'x');
+    });
+}
+
+function setSimMode(mode) {
+    if (!simState || simState.finished) return;
+    simState.mode = mode;
+    simState.modeConfig = SIM_MODES[mode] || SIM_MODES.mid;
+    document.querySelectorAll('.sim-mode-btn').forEach(btn => btn.classList.remove('active'));
+    const activeBtn = document.querySelector(`.sim-mode-btn[onclick*="${mode}"]`);
+    if (activeBtn) activeBtn.classList.add('active');
+}
+
+function toggleSimPause() {
+    if (!simState || simState.finished) return;
+    simState.paused = !simState.paused;
+    const btn = document.getElementById('simPauseBtn');
+    if (btn) {
+        btn.textContent = simState.paused ? '▶ Resume' : '⏸ Pause';
+        btn.classList.toggle('paused', simState.paused);
+    }
+    if (!simState.paused) {
+        simState.lastTimestamp = performance.now();
+        requestAnimationFrame(simLoop);
+    }
+}
+
+function instantFinishSim() {
+    if (!simState || simState.finished) return;
+    
+    // Simulate remaining time instantly
+    while (simState.matchMinute < SIM_MATCH_DURATION) {
+        simTick();
+    }
+    simState.finished = true;
+    showSimResult();
+}
+
+// ---- SIMULATION LOOP ----
+function simLoop(timestamp) {
+    if (!simState || simState.finished || simState.paused) return;
+
+    if (simState.lastTimestamp === 0) simState.lastTimestamp = timestamp;
+    const delta = (timestamp - simState.lastTimestamp) / 1000; // seconds
+    simState.lastTimestamp = timestamp;
+
+    // Accumulate ticks based on speed
+    const tickInterval = 1 / (simState.ticksPerMinute * simState.speed); // seconds per tick at 1 minute = ticksPerMinute ticks
+    simState.tickAccumulator += delta;
+
+    // Process ticks
+    const maxTicksPerFrame = Math.min(Math.floor(simState.tickAccumulator / tickInterval), 50);
+    for (let i = 0; i < maxTicksPerFrame; i++) {
+        simTick();
+        simState.tickAccumulator -= tickInterval;
+        if (simState.finished) break;
+    }
+    if (simState.tickAccumulator > tickInterval * 5) simState.tickAccumulator = 0;
+
+    // Render
+    renderSimPitch();
+    updateSimUI();
+
+    if (!simState.finished) {
+        simState.animFrameId = requestAnimationFrame(simLoop);
+    }
+}
+
+// ---- GAME TICK ----
+function simTick() {
+    if (!simState || simState.finished) return;
+
+    simState.totalTicks++;
+    simState.matchMinute = Math.min(SIM_MATCH_DURATION, simState.totalTicks / simState.ticksPerMinute);
+
+    if (simState.matchMinute >= SIM_MATCH_DURATION) {
+        simState.matchMinute = SIM_MATCH_DURATION;
+        simState.finished = true;
+        showSimResult();
+        return;
+    }
+
+    // Half-time event
+    if (!simState.halfTimeDone && simState.matchMinute >= 45) {
+        simState.halfTimeDone = true;
+        addSimEvent('halftime', `── HALF TIME ──  ${simState.homeScore} - ${simState.awayScore}`, null);
+    }
+
+    const cfg = simState.modeConfig;
+    const allPlayers = [...simState.homeEntities, ...simState.awayEntities];
+
+    // --- Move players toward targets with some drift ---
+    allPlayers.forEach(ent => {
+        // Wander: occasionally pick new target near base
+        if (Math.random() < 0.03) {
+            const driftRange = ent.player.position === 'GK' ? 30 : (ent.player.position === 'DEF' ? 60 : 100);
+            ent.targetX = ent.baseX + (Math.random() - 0.5) * driftRange * 2;
+            ent.targetY = ent.baseY + (Math.random() - 0.5) * driftRange * 2;
+            // Clamp
+            ent.targetX = Math.max(SIM_PLAYER_R, Math.min(SIM_PITCH_W - SIM_PLAYER_R, ent.targetX));
+            ent.targetY = Math.max(SIM_PLAYER_R, Math.min(SIM_PITCH_H - SIM_PLAYER_R, ent.targetY));
+        }
+
+        // If chasing ball
+        if (simState.ball.carrier === null && Math.random() < 0.15) {
+            // Some players chase the ball
+            const dist = Math.hypot(ent.x - simState.ball.x, ent.y - simState.ball.y);
+            if (dist < 200) {
+                ent.targetX = simState.ball.x + (Math.random() - 0.5) * 30;
+                ent.targetY = simState.ball.y + (Math.random() - 0.5) * 30;
+            }
+        }
+
+        // Move toward target
+        const dx = ent.targetX - ent.x;
+        const dy = ent.targetY - ent.y;
+        const dist = Math.hypot(dx, dy);
+        if (dist > 2) {
+            const speed = cfg.playerSpeed * (0.8 + (ent.player.rating / 100) * 0.4);
+            ent.x += (dx / dist) * speed;
+            ent.y += (dy / dist) * speed;
+        }
+    });
+
+    // --- Ball logic ---
+    const ball = simState.ball;
+    if (ball.carrier) {
+        // Ball follows carrier
+        ball.x = ball.carrier.x;
+        ball.y = ball.carrier.y;
+
+        // Track possession
+        if (ball.carrier.side === 'home') simState.possession.home++;
+        else simState.possession.away++;
+
+        // Chance to pass or lose ball
+        if (Math.random() < 0.06) {
+            // Pass to a teammate
+            const teammates = (ball.carrier.side === 'home' ? simState.homeEntities : simState.awayEntities)
+                .filter(e => e !== ball.carrier);
+            if (teammates.length > 0) {
+                const target = teammates[Math.floor(Math.random() * teammates.length)];
+                ball.carrier = null;
+                ball.targetX = target.x + (Math.random() - 0.5) * 20;
+                ball.targetY = target.y + (Math.random() - 0.5) * 20;
+                ball.vx = (ball.targetX - ball.x) * 0.12;
+                ball.vy = (ball.targetY - ball.y) * 0.12;
+            }
+        } else if (Math.random() < 0.02) {
+            // Lose ball
+            ball.carrier = null;
+            ball.vx = (Math.random() - 0.5) * cfg.ballSpeed * 2;
+            ball.vy = (Math.random() - 0.5) * cfg.ballSpeed * 2;
+        }
+    } else {
+        // Ball is free - move toward target
+        ball.x += ball.vx;
+        ball.y += ball.vy;
+        ball.vx *= 0.96;
+        ball.vy *= 0.96;
+
+        // Bounce off walls
+        if (ball.x < SIM_BALL_R) { ball.x = SIM_BALL_R; ball.vx = Math.abs(ball.vx); }
+        if (ball.x > SIM_PITCH_W - SIM_BALL_R) { ball.x = SIM_PITCH_W - SIM_BALL_R; ball.vx = -Math.abs(ball.vx); }
+        if (ball.y < SIM_BALL_R) { ball.y = SIM_BALL_R; ball.vy = Math.abs(ball.vy); }
+        if (ball.y > SIM_PITCH_H - SIM_BALL_R) { ball.y = SIM_PITCH_H - SIM_BALL_R; ball.vy = -Math.abs(ball.vy); }
+
+        // Check if any player picks up ball
+        allPlayers.forEach(ent => {
+            const d = Math.hypot(ent.x - ball.x, ent.y - ball.y);
+            if (d < SIM_PLAYER_R + SIM_BALL_R + 5) {
+                ball.carrier = ent;
+                ball.vx = 0;
+                ball.vy = 0;
+            }
+        });
+    }
+
+    // --- Goal events ---
+    if (Math.random() < cfg.goalChance) {
+        // Determine which team scores based on ratings and possession
+        const homeChance = 0.5 + (simState.ratingDiff / 100);
+        const scoringSide = Math.random() < homeChance ? 'home' : 'away';
+        const scoringTeam = scoringSide === 'home' ? simState.homeEntities : simState.awayEntities;
+        const team = scoringSide === 'home' ? simState.homeTeam : simState.awayTeam;
+
+        // Weighted random scorer (FWD/MID more likely)
+        const goalWeights = { GK: 0.001, DEF: 0.15, MID: 1.0, FWD: 3.0 };
+        const scorer = getWeightedSimPlayer(scoringTeam, goalWeights);
+        
+        // Weighted random assister
+        const assistWeights = { GK: 0.01, DEF: 0.4, MID: 2.0, FWD: 1.5 };
+        const assister = getWeightedSimPlayer(scoringTeam.filter(e => e !== scorer), assistWeights);
+
+        if (scorer) {
+            if (scoringSide === 'home') {
+                simState.homeScore++;
+                simState.goalScorers.home.push({ player: scorer.player, minute: Math.floor(simState.matchMinute) });
+            } else {
+                simState.awayScore++;
+                simState.goalScorers.away.push({ player: scorer.player, minute: Math.floor(simState.matchMinute) });
+            }
+
+            // Update actual player stats
+            scorer.player.goals++;
+            if (assister && assister !== scorer) {
+                assister.player.assists++;
+                if (scoringSide === 'home') simState.assisters.home.push({ player: assister.player, minute: Math.floor(simState.matchMinute) });
+                else simState.assisters.away.push({ player: assister.player, minute: Math.floor(simState.matchMinute) });
+            }
+
+            const assistText = (assister && assister !== scorer) ? ` (assist: ${assister.player.name})` : '';
+            addSimEvent('goal', `⚽ ${Math.floor(simState.matchMinute)}' GOAL! ${scorer.player.name} scores for ${team.name}!${assistText}`, scoringSide);
+
+            // Animate: move ball to goal
+            ball.carrier = null;
+            ball.x = scoringSide === 'home' ? SIM_PITCH_W - 10 : 10;
+            ball.y = SIM_PITCH_H / 2;
+            ball.vx = 0;
+            ball.vy = 0;
+
+            // Reset positions after goal
+            resetPlayerPositions();
+        }
+    }
+
+    // --- Card events ---
+    if (Math.random() < cfg.cardChance) {
+        const side = Math.random() < 0.5 ? 'home' : 'away';
+        const teamEntities = side === 'home' ? simState.homeEntities : simState.awayEntities;
+        const team = side === 'home' ? simState.homeTeam : simState.awayTeam;
+        const cardPlayer = teamEntities[Math.floor(Math.random() * teamEntities.length)];
+        
+        if (cardPlayer) {
+            const isRed = Math.random() < 0.08;
+            if (isRed) {
+                cardPlayer.player.redCards++;
+                simState.cards[side].push({ player: cardPlayer.player, type: 'red', minute: Math.floor(simState.matchMinute) });
+                addSimEvent('card', `🟥 ${Math.floor(simState.matchMinute)}' RED CARD! ${cardPlayer.player.name} (${team.name})`, side);
+            } else {
+                cardPlayer.player.yellowCards++;
+                simState.cards[side].push({ player: cardPlayer.player, type: 'yellow', minute: Math.floor(simState.matchMinute) });
+                addSimEvent('card', `🟨 ${Math.floor(simState.matchMinute)}' Yellow card: ${cardPlayer.player.name} (${team.name})`, side);
+            }
+        }
+    }
+
+    // --- Passing stats (accumulated throughout) ---
+    if (simState.totalTicks % 20 === 0) {
+        allPlayers.forEach(ent => {
+            const p = ent.player;
+            let attempts;
+            if (p.position === "GK") attempts = randomInt(0, 1);
+            else if (p.position === "DEF") attempts = randomInt(0, 2);
+            else if (p.position === "MID") attempts = randomInt(1, 3);
+            else attempts = randomInt(0, 2);
+            
+            p.passesAttempted += attempts;
+            const passRating = p.passingRating || p.rating;
+            const accuracy = 70 + ((passRating - 60) / (99 - 60)) * 25;
+            p.passesCompleted += Math.round(attempts * (accuracy / 100));
+        });
+    }
+}
+
+function getWeightedSimPlayer(entities, posWeights) {
+    if (!entities || entities.length === 0) return null;
+    const weights = entities.map(e => {
+        const pw = posWeights[e.player.position] || 1.0;
+        return Math.pow(e.player.rating || 70, 3) * pw;
+    });
+    const total = weights.reduce((a, b) => a + b, 0);
+    let r = Math.random() * total;
+    for (let i = 0; i < entities.length; i++) {
+        r -= weights[i];
+        if (r <= 0) return entities[i];
+    }
+    return entities[entities.length - 1];
+}
+
+function resetPlayerPositions() {
+    if (!simState) return;
+    const allEntities = [...simState.homeEntities, ...simState.awayEntities];
+    allEntities.forEach(ent => {
+        ent.targetX = ent.baseX;
+        ent.targetY = ent.baseY;
+    });
+    simState.ball.x = SIM_PITCH_W / 2;
+    simState.ball.y = SIM_PITCH_H / 2;
+    simState.ball.carrier = null;
+    simState.ball.vx = 0;
+    simState.ball.vy = 0;
+}
+
+function addSimEvent(type, text, side) {
+    if (!simState) return;
+    simState.events.push({ type, text, side, minute: Math.floor(simState.matchMinute) });
+    const evDiv = document.getElementById('simEvents');
+    if (evDiv) {
+        const item = document.createElement('div');
+        item.className = `sim-event-item ${type}`;
+        item.textContent = text;
+        evDiv.insertBefore(item, evDiv.firstChild);
+        // Keep only last 50
+        while (evDiv.children.length > 50) evDiv.removeChild(evDiv.lastChild);
+    }
+}
+
+// ---- UI UPDATES ----
+function updateSimUI() {
+    if (!simState) return;
+    const hs = document.getElementById('simHomeScore');
+    const as = document.getElementById('simAwayScore');
+    const timer = document.getElementById('simTimer');
+    if (hs) hs.textContent = simState.homeScore;
+    if (as) as.textContent = simState.awayScore;
+    if (timer) timer.textContent = Math.floor(simState.matchMinute) + "'";
+}
+
+// ---- PITCH RENDERING ----
+function renderSimPitch() {
+    if (!simState) return;
+    const canvas = document.getElementById('simCanvas');
+    if (!canvas) return;
+    const ctx = canvas.getContext('2d');
+    const W = canvas.width;
+    const H = canvas.height;
+
+    // --- Draw pitch ---
+    // Grass
+    const grassGrad = ctx.createLinearGradient(0, 0, 0, H);
+    grassGrad.addColorStop(0, '#1a6b1a');
+    grassGrad.addColorStop(0.5, '#228B22');
+    grassGrad.addColorStop(1, '#1a6b1a');
+    ctx.fillStyle = grassGrad;
+    ctx.fillRect(0, 0, W, H);
+
+    // Grass stripes
+    ctx.fillStyle = 'rgba(255,255,255,0.03)';
+    for (let i = 0; i < W; i += 80) {
+        if ((i / 80) % 2 === 0) ctx.fillRect(i, 0, 80, H);
+    }
+
+    ctx.strokeStyle = 'rgba(255,255,255,0.6)';
+    ctx.lineWidth = 2;
+
+    // Boundary
+    ctx.strokeRect(5, 5, W - 10, H - 10);
+
+    // Center line
+    ctx.beginPath();
+    ctx.moveTo(W / 2, 5);
+    ctx.lineTo(W / 2, H - 5);
+    ctx.stroke();
+
+    // Center circle
+    ctx.beginPath();
+    ctx.arc(W / 2, H / 2, 60, 0, Math.PI * 2);
+    ctx.stroke();
+
+    // Center dot
+    ctx.fillStyle = 'rgba(255,255,255,0.8)';
+    ctx.beginPath();
+    ctx.arc(W / 2, H / 2, 4, 0, Math.PI * 2);
+    ctx.fill();
+
+    // Penalty areas
+    const penW = 120;
+    const penH = 260;
+    const penY = (H - penH) / 2;
+    ctx.strokeRect(5, penY, penW, penH);
+    ctx.strokeRect(W - 5 - penW, penY, penW, penH);
+
+    // Goal areas
+    const goalW = 45;
+    const goalH = 140;
+    const goalY = (H - goalH) / 2;
+    ctx.strokeRect(5, goalY, goalW, goalH);
+    ctx.strokeRect(W - 5 - goalW, goalY, goalW, goalH);
+
+    // Goals (nets)
+    ctx.fillStyle = 'rgba(255,255,255,0.15)';
+    const netW = 12;
+    const netH = 80;
+    const netY = (H - netH) / 2;
+    ctx.fillRect(0, netY, netW, netH);
+    ctx.fillRect(W - netW, netY, netW, netH);
+
+    // Penalty spots
+    ctx.fillStyle = 'rgba(255,255,255,0.6)';
+    ctx.beginPath(); ctx.arc(90, H / 2, 3, 0, Math.PI * 2); ctx.fill();
+    ctx.beginPath(); ctx.arc(W - 90, H / 2, 3, 0, Math.PI * 2); ctx.fill();
+
+    // Penalty arcs
+    ctx.beginPath();
+    ctx.arc(90, H / 2, 60, -0.7, 0.7);
+    ctx.stroke();
+    ctx.beginPath();
+    ctx.arc(W - 90, H / 2, 60, Math.PI - 0.7, Math.PI + 0.7);
+    ctx.stroke();
+
+    // Corner arcs
+    ctx.beginPath(); ctx.arc(5, 5, 15, 0, Math.PI / 2); ctx.stroke();
+    ctx.beginPath(); ctx.arc(W - 5, 5, 15, Math.PI / 2, Math.PI); ctx.stroke();
+    ctx.beginPath(); ctx.arc(5, H - 5, 15, -Math.PI / 2, 0); ctx.stroke();
+    ctx.beginPath(); ctx.arc(W - 5, H - 5, 15, Math.PI, Math.PI * 1.5); ctx.stroke();
+
+    // --- Draw players ---
+    const homeColor = simState.homeTeam.color || '#3498db';
+    const awayColor = simState.awayTeam.color || '#e74c3c';
+
+    // Home players
+    simState.homeEntities.forEach(ent => {
+        drawPlayerCoin(ctx, ent, homeColor);
+    });
+
+    // Away players
+    simState.awayEntities.forEach(ent => {
+        drawPlayerCoin(ctx, ent, awayColor);
+    });
+
+    // --- Draw ball ---
+    drawBall(ctx, simState.ball);
+
+    // --- Possession bar ---
+    const totalPoss = simState.possession.home + simState.possession.away;
+    if (totalPoss > 0) {
+        const homePct = Math.round((simState.possession.home / totalPoss) * 100);
+        const awayPct = 100 - homePct;
+        const barY = H - 18;
+        const barH = 10;
+        const barW = W - 10;
+        
+        ctx.fillStyle = 'rgba(0,0,0,0.5)';
+        ctx.fillRect(5, barY, barW, barH);
+        
+        ctx.fillStyle = homeColor;
+        ctx.fillRect(5, barY, barW * (homePct / 100), barH);
+        
+        ctx.fillStyle = awayColor;
+        ctx.fillRect(5 + barW * (homePct / 100), barY, barW * (awayPct / 100), barH);
+
+        ctx.fillStyle = 'white';
+        ctx.font = 'bold 8px Orbitron, sans-serif';
+        ctx.textAlign = 'left';
+        ctx.fillText(`${homePct}%`, 10, barY + 8);
+        ctx.textAlign = 'right';
+        ctx.fillText(`${awayPct}%`, W - 10, barY + 8);
+        ctx.textAlign = 'center';
+        ctx.fillText('POSSESSION', W / 2, barY + 8);
+    }
+}
+
+function drawPlayerCoin(ctx, entity, teamColor) {
+    const { x, y, player, glowColor, label, radius } = entity;
+
+    ctx.save();
+
+    // Glow for special players
+    if (glowColor) {
+        ctx.shadowColor = glowColor;
+        ctx.shadowBlur = 15;
+    }
+
+    // Outer ring (team color)
+    ctx.beginPath();
+    ctx.arc(x, y, radius + 2, 0, Math.PI * 2);
+    ctx.fillStyle = teamColor;
+    ctx.fill();
+
+    // Inner coin
+    const innerGrad = ctx.createRadialGradient(x - 3, y - 3, 1, x, y, radius);
+    innerGrad.addColorStop(0, '#555');
+    innerGrad.addColorStop(0.5, '#333');
+    innerGrad.addColorStop(1, '#1a1a1a');
+    ctx.beginPath();
+    ctx.arc(x, y, radius, 0, Math.PI * 2);
+    ctx.fillStyle = innerGrad;
+    ctx.fill();
+
+    ctx.shadowBlur = 0;
+
+    // Player initials
+    ctx.fillStyle = entity.color;
+    ctx.font = `bold ${radius * 0.75}px Orbitron, sans-serif`;
+    ctx.textAlign = 'center';
+    ctx.textBaseline = 'middle';
+    ctx.fillText(label, x, y);
+
+    // Position indicator (tiny dot at bottom)
+    const posColors = { GK: '#fbc531', DEF: '#4cd137', MID: '#00d2d3', FWD: '#e84118' };
+    ctx.beginPath();
+    ctx.arc(x, y + radius - 2, 3, 0, Math.PI * 2);
+    ctx.fillStyle = posColors[player.position] || '#fff';
+    ctx.fill();
+
+    // Ball indicator
+    if (entity === simState.ball.carrier) {
+        ctx.strokeStyle = '#FFD700';
+        ctx.lineWidth = 2;
+        ctx.beginPath();
+        ctx.arc(x, y, radius + 5, 0, Math.PI * 2);
+        ctx.stroke();
+    }
+
+    ctx.restore();
+}
+
+function drawBall(ctx, ball) {
+    if (ball.carrier) return; // Ball is with a player, don't draw separately
+
+    ctx.save();
+    ctx.shadowColor = 'rgba(255,255,255,0.8)';
+    ctx.shadowBlur = 8;
+
+    // Ball
+    const grad = ctx.createRadialGradient(ball.x - 2, ball.y - 2, 1, ball.x, ball.y, SIM_BALL_R);
+    grad.addColorStop(0, '#ffffff');
+    grad.addColorStop(1, '#cccccc');
+    ctx.beginPath();
+    ctx.arc(ball.x, ball.y, SIM_BALL_R, 0, Math.PI * 2);
+    ctx.fillStyle = grad;
+    ctx.fill();
+
+    // Black pentagon pattern hint
+    ctx.strokeStyle = 'rgba(0,0,0,0.3)';
+    ctx.lineWidth = 0.5;
+    ctx.beginPath();
+    ctx.arc(ball.x, ball.y, SIM_BALL_R * 0.5, 0, Math.PI * 2);
+    ctx.stroke();
+
+    ctx.restore();
+}
+
+// ---- SHOW RESULT ----
+function showSimResult() {
+    if (!simState) return;
+    
+    updateSimUI();
+    
+    const container = document.getElementById('simContainer');
+    if (!container) return;
+
+    // Build scorers text
+    let scorersHTML = '';
+    if (simState.goalScorers.home.length > 0) {
+        scorersHTML += `<div style="margin-bottom:8px;"><strong style="color:${simState.homeTeam.color}">${simState.homeTeam.name}:</strong> `;
+        scorersHTML += simState.goalScorers.home.map(g => `${g.player.name} ${g.minute}'`).join(', ');
+        scorersHTML += '</div>';
+    }
+    if (simState.goalScorers.away.length > 0) {
+        scorersHTML += `<div><strong style="color:${simState.awayTeam.color}">${simState.awayTeam.name}:</strong> `;
+        scorersHTML += simState.goalScorers.away.map(g => `${g.player.name} ${g.minute}'`).join(', ');
+        scorersHTML += '</div>';
+    }
+
+    // Cards
+    let cardsHTML = '';
+    const allCards = [...simState.cards.home.map(c => ({ ...c, team: simState.homeTeam.name })),
+                      ...simState.cards.away.map(c => ({ ...c, team: simState.awayTeam.name }))];
+    if (allCards.length > 0) {
+        cardsHTML = `<div style="margin-top:10px; font-size:0.85rem; color:#aaa;">`;
+        allCards.forEach(c => {
+            const icon = c.type === 'red' ? '🟥' : '🟨';
+            cardsHTML += `<div>${icon} ${c.player.name} (${c.team}) ${c.minute}'</div>`;
+        });
+        cardsHTML += `</div>`;
+    }
+
+    // Possession
+    const totalPoss = simState.possession.home + simState.possession.away;
+    const homePct = totalPoss > 0 ? Math.round((simState.possession.home / totalPoss) * 100) : 50;
+    const awayPct = 100 - homePct;
+
+    const resultOverlay = document.createElement('div');
+    resultOverlay.className = 'sim-result-overlay';
+    resultOverlay.innerHTML = `
+        <div class="sim-result-card">
+            <div class="sim-result-title">FULL TIME</div>
+            <div style="font-size:1.1rem; color:#aaa; margin-bottom:5px;">
+                <span style="color:${simState.homeTeam.color}">${simState.homeTeam.name}</span> vs 
+                <span style="color:${simState.awayTeam.color}">${simState.awayTeam.name}</span>
+            </div>
+            <div class="sim-result-score">${simState.homeScore} - ${simState.awayScore}</div>
+            <div class="sim-result-scorers">${scorersHTML || '<em>No goals scored</em>'}</div>
+            ${cardsHTML}
+            <div style="margin-top:12px; font-size:0.85rem; color:#888;">
+                Possession: <span style="color:${simState.homeTeam.color}">${homePct}%</span> - <span style="color:${simState.awayTeam.color}">${awayPct}%</span>
+            </div>
+            <button class="sim-result-btn" onclick="confirmSimResult()">✅ Confirm & Save Result</button>
+        </div>
+    `;
+    container.style.position = 'relative';
+    container.appendChild(resultOverlay);
+}
+
+// ---- CONFIRM & SAVE ----
+function confirmSimResult() {
+    if (!simState) return;
+
+    const result = {
+        homeScore: simState.homeScore,
+        awayScore: simState.awayScore,
+        goalScorers: simState.goalScorers,
+        assisters: simState.assisters,
+        cards: simState.cards,
+        events: simState.events
+    };
+
+    if (simState.onFinish) {
+        simState.onFinish(simState);
+    }
+
+    closeMatchSimulation();
+}
+
+// ---- INTEGRATION: Launch sim for league match ----
+function simulateNextMatchVisual() {
+    if (currentMatchIndex >= fixtures.length) return;
+    const match = fixtures[currentMatchIndex];
+
+    openMatchSimulation(match.home, match.away, {
+        mode: 'mid',
+        isKnockout: false,
+        onResult: (result) => {
+            match.homeScore = result.homeScore;
+            match.awayScore = result.awayScore;
+            match.played = true;
+
+            // Stats are already updated on player objects during simulation (goals, assists, cards, passes)
+            // We just need to update team stats
+            updateTeamStats(match);
+
+            currentMatchIndex++;
+            
+            matchHistory.push({
+                homeTeam: match.home.name,
+                awayTeam: match.away.name,
+                homeScore: match.homeScore,
+                awayScore: match.awayScore,
+            });
+            localStorage.setItem("matchHistory", JSON.stringify(matchHistory));
+
+            renderCurrentMatch();
+            renderLeagueTable();
+            checkSeasonEnd();
+        }
+    });
+}
+
+// ---- INTEGRATION: Launch sim for knockout match ----
+function simulateKnockoutMatchVisual() {
+    if (!knockoutMatches || knockoutStage >= knockoutMatches.length) return;
+    const m = knockoutMatches[knockoutStage];
+
+    openMatchSimulation(m.home, m.away, {
+        mode: 'mid',
+        isKnockout: true,
+        onResult: (result) => {
+            // Use saveKnockoutResult but flag to skip distributePlayerStats 
+            // since the visual sim already tracked player stats in real-time
+            saveKnockoutResultVisual(m, result.homeScore, result.awayScore);
+            renderNextKnockoutMatch();
+        }
+    });
+}
+
+// Knockout result save that skips distributePlayerStats (already done during visual sim)
+function saveKnockoutResultVisual(m, homeScore, awayScore) {
+    let penaltyNote = '';
+    let displayHome = homeScore;
+    let displayAway = awayScore;
+    if (homeScore === awayScore) {
+        if (Math.random() < 0.5) displayHome = homeScore + 1;
+        else displayAway = awayScore + 1;
+        penaltyNote = ` (Penalties: ${displayHome}-${displayAway})`;
+    }
+    const winner = displayHome > displayAway ? m.home : m.away;
+
+    m.home.stats.played++;
+    m.away.stats.played++;
+    m.home.stats.goalsFor += homeScore;
+    m.home.stats.goalsAgainst += awayScore;
+    m.away.stats.goalsFor += awayScore;
+    m.away.stats.goalsAgainst += homeScore;
+
+    if (displayHome > displayAway) {
+        m.home.stats.wins++;
+        m.away.stats.losses++;
+    } else {
+        m.away.stats.wins++;
+        m.home.stats.losses++;
+    }
+
+    // NOTE: No distributePlayerStats call — visual sim already tracked stats
+
+    knockoutResults.push({
+        stage: knockoutStage,
+        match: m,
+        homeScore: displayHome,
+        awayScore: displayAway,
+        winner,
+        penaltyNote
+    });
+
+    knockoutStage++;
+}

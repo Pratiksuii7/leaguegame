@@ -7,6 +7,7 @@ let knockoutMatches = [];
 let knockoutResults = [];
 let knockoutHistory = [];
 let knockoutStage = 0;
+let seasonEnded = false;
 let seasonHistory = [];
 let globalRecords = {
     topScorers: [], // { name, team, goals, season }
@@ -323,10 +324,15 @@ function distributePlayerStats(match, homeScore, awayScore) {
   // Cards, Penalties, Freekicks, Passing - Position-based
   [match.home.players, match.away.players].forEach(teamPlayers => {
       teamPlayers.forEach(p => {
-          // Cards (DEF and MID more likely to get cards)
-          let cardChance = p.position === "DEF" ? 15 : p.position === "MID" ? 20 : 25;
+          // Cards (DEF and MID most likely, GK very rare)
+          let cardChance;
+          if (p.position === "GK") cardChance = 200;       // Very rare
+          else if (p.position === "DEF") cardChance = 12;   // Most likely
+          else if (p.position === "MID") cardChance = 15;
+          else cardChance = 20;                              // FWD
           if (randomInt(1, cardChance) === 1) p.yellowCards++;
-          if (randomInt(1, 60) === 1) p.redCards++;
+          let redChance = p.position === "GK" ? 500 : 60;
+          if (randomInt(1, redChance) === 1) p.redCards++;
 
           // Penalties (FWD and MID more likely)
           let penaltyChance = p.position === "FWD" ? 80 : p.position === "MID" ? 120 : 200;
@@ -404,10 +410,26 @@ function getSortedTeams() {
     );
 }
 
-function saveKnockoutResult(m, homeScore, awayScore) {
-    const winner = homeScore > awayScore ? m.home : m.away;
+function saveKnockoutResult(m, homeScore, awayScore, penaltyResult) {
+    // penaltyResult: { homePenScore, awayPenScore } or null
+    let penaltyNote = '';
+    let displayHome = homeScore;
+    let displayAway = awayScore;
+    if (penaltyResult) {
+        penaltyNote = ` (Penalties: ${penaltyResult.homePenScore}-${penaltyResult.awayPenScore})`;
+    }
+    // Determine winner: if draw, use penalty result
+    let winner;
+    if (homeScore !== awayScore) {
+        winner = homeScore > awayScore ? m.home : m.away;
+    } else if (penaltyResult) {
+        winner = penaltyResult.homePenScore > penaltyResult.awayPenScore ? m.home : m.away;
+    } else {
+        // Fallback (should not happen)
+        winner = Math.random() < 0.5 ? m.home : m.away;
+    }
 
-    // Increment stats
+    // Increment stats (use original scores for stats)
     m.home.stats.played++;
     m.away.stats.played++;
     m.home.stats.goalsFor += homeScore;
@@ -415,7 +437,7 @@ function saveKnockoutResult(m, homeScore, awayScore) {
     m.away.stats.goalsFor += awayScore;
     m.away.stats.goalsAgainst += homeScore;
 
-    if (homeScore > awayScore) {
+    if (winner === m.home) {
         m.home.stats.wins++;
         m.away.stats.losses++;
     } else {
@@ -428,10 +450,87 @@ function saveKnockoutResult(m, homeScore, awayScore) {
     knockoutResults.push({
         stage: knockoutStage,
         match: m,
-        homeScore,
-        awayScore,
-        winner
+        homeScore: displayHome,
+        awayScore: displayAway,
+        winner,
+        penaltyNote,
+        penaltyResult: penaltyResult || null
     });
+
+    knockoutStage++;
+}
+
+// Auto-resolve penalty shootout (for instant sims)
+function autoResolvePenaltyShootout(homeTeam, awayTeam) {
+    const getTeamRating = (team) => {
+        if (!team.players || team.players.length === 0) return 70;
+        return team.players.reduce((s, p) => s + (p.rating || 70), 0) / team.players.length;
+    };
+    const homeRating = getTeamRating(homeTeam);
+    const awayRating = getTeamRating(awayTeam);
+
+    // Pick 5 penalty takers per team (prefer FWD/MID)
+    const pickTakers = (team) => {
+        const sorted = [...team.players].sort((a, b) => {
+            const posWeight = { FWD: 4, MID: 3, DEF: 2, GK: 1 };
+            return (posWeight[b.position] || 2) - (posWeight[a.position] || 2) || b.rating - a.rating;
+        });
+        return sorted.slice(0, 5);
+    };
+
+    const homeTakers = pickTakers(homeTeam);
+    const awayTakers = pickTakers(awayTeam);
+
+    const kicks = [];
+    let homeGoals = 0, awayGoals = 0;
+
+    // First 5 rounds
+    for (let i = 0; i < 5; i++) {
+        // Home kick
+        const hPlayer = homeTakers[i] || homeTakers[homeTakers.length - 1];
+        const hBase = 70 + ((hPlayer.rating - 60) / 40) * 15;
+        const hScored = Math.random() * 100 < hBase;
+        if (hScored) homeGoals++;
+        kicks.push({ round: i + 1, side: 'home', player: hPlayer, scored: hScored });
+
+        // Away kick
+        const aPlayer = awayTakers[i] || awayTakers[awayTakers.length - 1];
+        const aBase = 70 + ((aPlayer.rating - 60) / 40) * 15;
+        const aScored = Math.random() * 100 < aBase;
+        if (aScored) awayGoals++;
+        kicks.push({ round: i + 1, side: 'away', player: aPlayer, scored: aScored });
+
+        // Check if shootout is decided early
+        const roundsLeft = 4 - i;
+        if (homeGoals > awayGoals + roundsLeft) break; // Home can't be caught
+        if (awayGoals > homeGoals + roundsLeft) break; // Away can't be caught
+    }
+
+    // Sudden death if still tied
+    let sdRound = 6;
+    while (homeGoals === awayGoals) {
+        const hIdx = (sdRound - 1) % homeTakers.length;
+        const aIdx = (sdRound - 1) % awayTakers.length;
+        const hPlayer = homeTakers[hIdx];
+        const aPlayer = awayTakers[aIdx];
+        const hBase = 70 + ((hPlayer.rating - 60) / 40) * 15;
+        const aBase = 70 + ((aPlayer.rating - 60) / 40) * 15;
+        const hScored = Math.random() * 100 < hBase;
+        const aScored = Math.random() * 100 < aBase;
+        if (hScored) homeGoals++;
+        if (aScored) awayGoals++;
+        kicks.push({ round: sdRound, side: 'home', player: hPlayer, scored: hScored });
+        kicks.push({ round: sdRound, side: 'away', player: aPlayer, scored: aScored });
+        sdRound++;
+        if (sdRound > 20) { homeGoals++; break; } // Safety cap
+    }
+
+    return {
+        homePenScore: homeGoals,
+        awayPenScore: awayGoals,
+        kicks: kicks,
+        winner: homeGoals > awayGoals ? 'home' : 'away'
+    };
 }
 
 function updateGlobalRecords(seasonIndex) {
